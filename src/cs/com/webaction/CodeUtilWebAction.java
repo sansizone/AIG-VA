@@ -28,6 +28,8 @@ public class CodeUtilWebAction extends XwingWebAction {
 	public void perform(JediRequest req, JediResponse res)
 			throws WebActionException {
 		try {
+			// if(getCsrfFlag()) throw new WebActionException("CSRF", "CSRF::비정상적인 접근입니다.");
+			
 			String cmd = req.param.getString("cmd");
 
 			if ("getCodes".equals(cmd)) {
