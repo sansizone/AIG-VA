@@ -15,6 +15,7 @@
 var tab_idx="";
 var browser = "";
 var ced_no="";
+var user_dept_cd="";
 var vrsRowNum="0", banRowNum="0";
 var ban_cd="", ban_keyword="";
 var sclf_cd="", sclf_nm="", cic="";
@@ -55,7 +56,7 @@ function page_load(event) {
 		if(ced_no.indexOf('?') != -1){
 			ced_no = ced_no.slice(0,-1);	
 		}
-
+		
 		$lbl_ced_no.setValue(ced_no);
 	
 		tab_idx= parameters['tab_idx'];
@@ -77,7 +78,8 @@ function page_load(event) {
 			dtTimeStamp('0',"Y");
 		}
 		
-		f_getGradeAuth();
+		getUserDeptCd();
+		//f_getGradeAuth();
 		getUserGroupCd();
 		getUcid();
 		init_player();
@@ -90,11 +92,25 @@ function page_load(event) {
 //*********************************************************************************************************
 //* UI ACTION
 //*********************************************************************************************************/
+function getUserDeptCd() {
+	var opt = {
+			reqId: "getUserDeptCd",
+			url: v_url,
+			param: {
+				_sqlName  : 'oba.oba010p1.getUserDeptCd.sel',
+				CED_NO : ced_no
+			},
+			indicator: null,
+			showError: true
+	};
+	
+	Xwing.request(opt, callback);
+}
 
 function f_getGradeAuth() {
 	var param = {
 		cmd : "getCodes",
-		codeType : "SYS001,SYS011",
+		codeType : "SYS001,SYS011,SYS151",
 		useyn : "Y"
 	};
 	var opt = {
@@ -152,7 +168,11 @@ function getReAnlStat(){
 
 
 function lbl_sub1_click(event) {
-	lbl_tab_action('lbl_sub1',"./OBA010T1.xhtml"); //청약정보
+	if(user_dept_cd == "Agent"){
+		lbl_tab_action('lbl_sub1',"./OBA010T1_GA.xhtml"); //청약정보(GATM)
+	}else{
+		lbl_tab_action('lbl_sub1',"./OBA010T1.xhtml"); //청약정보(TM)
+	}
 }
 
 function lbl_sub2_click(event) {
@@ -181,7 +201,7 @@ function lbl_sub6_click(event) {
 function lbl_tab_action(lbl,page){
 	for(var i = 1; i<7;i++){
 		//if(i==2) continue;
-		if(i==4) continue; //금칙어
+		//if(i==4) continue; 
 		if('lbl_sub'+i != lbl){
 			Xwing.getLabel('lbl_sub'+i).setFontweight('normal');
 			Xwing.getLabel('lbl_sub'+i).setBgcolor('');
@@ -311,6 +331,7 @@ function callback(reqId, res, err, xhr){
 	case "f_getGradeAuth":
 		$DS_GRADEAUTH.setData(res.SYS001.column, res.SYS001.record);
 		$DS_GROUPAUTH.setData(res.SYS011.column, res.SYS011.record);
+		$DS_GRADEAUTH_STT.setData(res.SYS151.column, res.SYS151.record);
 		if(tab_idx == 0){
 			lbl_sub1_click();
 		}else if(tab_idx == 1){
@@ -353,6 +374,15 @@ function callback(reqId, res, err, xhr){
 			workStatFunc.nowStat = res.DS_WORK_STAT.record[0]+"";
 			btn_work_stat_click();
 		}
+		break;
+		
+	case "getUserDeptCd":
+		var is_ga  = res.DS_DEPT_CD.record[0]+"";
+		if(is_ga=="Y")
+				user_dept_cd = "Agent";
+		else
+			user_dept_cd = "TM";
+		f_getGradeAuth();
 		break;
 		
 	case "getReAnlStat":
@@ -415,6 +445,30 @@ function setWorkStat(open){
 	});
 	
 }
+
+
+//엑셀버튼아이디, visible여부, main의 top볼수있는지 여부
+function excelDownAuthSTT(btnId,v,main){
+	v = v == undefined? true : v;
+	main = main == undefined? true : main;
+	var downPossible = "N";
+	if(main){
+		if(top.$DS_GRADEAUTH_STT.indexOfRow("CODENAME",global("G_USER_ID")) > -1)
+			downPossible = top.$DS_GRADEAUTH_STT.getValue(top.$DS_GRADEAUTH_STT.indexOfRow("CODENAME",global("G_USER_ID")),"USEYN");
+	}else{
+		if((parent.user_id != null) && parent.$DS_GRADEAUTH_STT.indexOfRow("CODENAME",parent.user_id)> -1)
+			downPossible = parent.$DS_GRADEAUTH_STT.getValue(parent.$DS_GRADEAUTH_STT.indexOfRow("CODENAME",parent.user_id),"USEYN");
+	}
+	if(downPossible == "Y"){
+		btnId.setEnabled(true);
+	}else{
+		btnId.setEnabled(false);
+		if(!v){
+			btnId.setVisible(false);
+		}
+	}
+
+}
 /*]]>*/</script>
 <xwing:data>
 	<xwing:dataset id="DS_UCID">
@@ -450,17 +504,18 @@ function setWorkStat(open){
 	<xwing:dataset id="DS_TMP"></xwing:dataset>
 	<xwing:dataset id="DS_INFO"></xwing:dataset>
 	<xwing:dataset id="DS_GROUPAUTH"></xwing:dataset>
+	<xwing:dataset id="DS_GRADEAUTH_STT"></xwing:dataset>
 </xwing:data>
 </head>
 <body>
 	<xwing:page id="page" title="청약리스트 상세조회" width="1280" height="900" load="page_load" scroll="false">
 		<xwing:panel id="pan_subtitle" left="0" top="0" width="779" height="35" anchor="top left" scroll="false" bgcolor="#fff" bggradientcolor="#f1f1f1" shadow="#58728d 0 5 0 0">
-			<xwing:label id="lbl_sub1" value="청약정보" left="0" top="0" fontsize="14" fontweight="bold" visible="true" halign="center" height="37" shadow="0 0 0 0" cursor="pointer" click="lbl_sub1_click" fontfamily="WallBoardFond" bgcolor="#58728d" fontcolor="#ffffff"></xwing:label>
-			<xwing:label id="lbl_sub2" value="요약" left="100" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub2_click"></xwing:label>
-			<xwing:label id="lbl_sub3" value="VRS" left="200" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub3_click"></xwing:label>
-			<xwing:label id="lbl_sub5" value="필수멘트" left="300" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub5_click" enabled="true"></xwing:label>
-			<xwing:label id="lbl_sub4" value="금칙어" left="500" top="0" fontsize="14" visible="false" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub4_click"></xwing:label>
-			<xwing:label id="lbl_sub6" value="평가표" left="400" top="0" fontsize="14" visible="false" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub6_click"></xwing:label>
+			<xwing:label id="lbl_sub1" value="청약정보" left="0" top="0" fontsize="14" fontweight="bold" visible="true" halign="center" height="37" shadow="0 0 0 0" cursor="pointer" click="lbl_sub1_click" fontfamily="WallBoardFond" bgcolor="#58728d" fontcolor="#ffffff" width="86"></xwing:label>
+			<xwing:label id="lbl_sub2" value="요약" left="85" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub2_click" width="85"></xwing:label>
+			<xwing:label id="lbl_sub3" value="VRS" left="170" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub3_click" width="85"></xwing:label>
+			<xwing:label id="lbl_sub4" value="금칙어" left="255" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub4_click" width="85"></xwing:label>
+			<xwing:label id="lbl_sub5" value="필수멘트" left="340" top="0" fontsize="14" visible="true" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub5_click" enabled="true" width="85"></xwing:label>
+			<xwing:label id="lbl_sub6" value="평가표" left="425" top="0" fontsize="14" visible="false" height="37" halign="center" cursor="pointer" fontfamily="WallBoardFond" click="lbl_sub6_click" width="85"></xwing:label>
 			<xwing:button id="btn_work_stat0" value="업무시작" left="520" top="4" width="80" click="btn_work_stat_click" height="25" borderwidth="1" fontfamily="WallBoardFond" fontsize="11" iconalign="left" icon="../images/img_area_5.png" anchor="right"></xwing:button>
 			<xwing:button id="btn_work_stat1" value="휴식시작" left="605" top="4" width="80" click="btn_work_stat_click" height="25" borderwidth="1" fontfamily="WallBoardFond" fontsize="11" anchor="right" icon="../images/img_area_5.png"></xwing:button>
 			<xwing:button id="btn_work_stat2" value="교육시작" left="690" top="4" width="80" click="btn_work_stat_click" height="25" borderwidth="1" fontfamily="WallBoardFond" fontsize="11" anchor="right" icon="../images/img_area_5.png"></xwing:button>
