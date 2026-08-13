@@ -23,6 +23,7 @@
 //********************************************************************************************************/
 var v_Rserver1 = false;
 var v_url = "service::wfm.info.inf040.do";
+var v_upload_code_type="";
 //*********************************************************************************************************
 //Page Action
 //********************************************************************************************************/
@@ -66,7 +67,8 @@ function f_codebook_sel() {
 //*〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓
 function grd_codetype_click(event) {
 	var v_row_idx = $grd_codetype.getSelection();
-
+	v_upload_code_type = $DS_CODETYPE.getValue(v_row_idx, "CODE_TYPE");
+	
 	//https 적용 후 동작 되지 않음.
 	//$DS_CODETYPE.copyToRow(v_row_idx, "DS_CODETYPE_D", 0);
 
@@ -94,10 +96,16 @@ function grd_codetype_click(event) {
 	$DS_CODETYPE_D.setValue(0,"USE_YN",$DS_CODETYPE.getValue(v_row_idx,"USE_YN"));
 	$DS_CODETYPE_D.setValue(0,"SORT_KEY",$DS_CODETYPE.getValue(v_row_idx,"SORT_KEY"));
 
-	if($DS_CODETYPE.getValue(v_row_idx,"CODE_TYPE")=="COM004"){
+	if($DS_CODETYPE.getValue(v_row_idx,"CODE_TYPE")=="COM004"){ //상품별보험종목매핑코드
 		$btn_upload.setVisible(true);
+		$btn_del_all.setVisible(false);
+	}else if(($DS_CODETYPE.getValue(v_row_idx,"CODE_TYPE")=="VSS150")		//금칙어항목
+			||($DS_CODETYPE.getValue(v_row_idx,"CODE_TYPE")=="VSS151")){	//금칙어그룹
+		$btn_upload.setVisible(true);
+		$btn_del_all.setVisible(true);
 	}else{
 		$btn_upload.setVisible(false);
+		$btn_del_all.setVisible(false);
 	}
 	f_data_ctrl("grd_codetype_click");
 	f_stc_ctrl();
@@ -399,6 +407,29 @@ function btn_refresh_click(event) {
 	});
 }
 
+function btn_del_all_click(event){
+	xwing.Dialog.confirm(v_upload_code_type+" 코드를 전체 삭제 하시겠습니까?", $page.getTitle(),
+			function(b) {
+				if (!b)
+					return false;
+				
+				var v_param = {
+						_sqlName : "wfm.info.inf040.fbd.del.all",
+						CODE_TYPE : v_upload_code_type
+				};
+				
+				var opt = {
+						reqId : "btn_del_all_click",
+						url : v_url,
+						param : v_param,
+						indicator : null,
+						showError : true
+				};
+				Xwing.request(opt, callback);
+	});
+	
+}
+
 //*********************************************************************************************************
 //Call Back Action
 //********************************************************************************************************/
@@ -490,6 +521,8 @@ function callback(reqId, res, err, xhr) {
 			xwing.Dialog.alert('코드 초기화에 실패하였습니다. 오류를 확인해주세요.');
 			return;
 		}
+	} else if(reqId == "btn_del_all_click"){
+		grd_codetype_click();
 	}
 	else{
 		
@@ -571,15 +604,29 @@ function btn_excel_code(event) {
 
 
 function btn_upload_click(event) {
+	var upload_url = "";
+	var upload_title = "";
+	
+	if(v_upload_code_type=="COM004"){
+		upload_url="./INF040P1.xhtml";
+		upload_title="상품 업로드";
+	}if(v_upload_code_type=="VSS150"){
+		upload_url="./INF040P2.xhtml";
+		upload_title="금칙어 항목 업로드";
+	}if(v_upload_code_type=="VSS151"){
+		upload_url="./INF040P3.xhtml";
+		upload_title="금칙어 그룹 업로드";
+	}
+	
 	var opt = {
 		id : 'script_upload',
-		url : "./INF040P1.xhtml",
+		url : upload_url,
 		width : 615,
 		height : 428,
 		draggable : true,
 		resizable : false,
 		modal : true,
-		title : "상품 업로드",
+		title : upload_title,
 	};
 
 	var user_upload = new xwing.Dialog(opt);
@@ -878,6 +925,7 @@ function setScript(ds_script) {
 			<xwing:button id="btn_reset02" value="신 규" left="383" top="17" anchor="none" styles="btn_action" width="60" tabindex="4" height="25" iconalign="left" borderwidth="0" shadow="0 0 0 " click="btn_reset02_click" borderstyle="none"></xwing:button>
 			<xwing:button id="btn_sav02" value="저 장" left="448" top="17" anchor="none" styles="btn_action" width="60" tabindex="4" height="25" iconalign="left" borderwidth="0" shadow="0 0 0 " click="btn_sav02_click" borderstyle="none"></xwing:button>
 			<xwing:button id="btn_upload" value="엑셀업로드" left="112" top="15" anchor="bottom left" width="80" tabindex="4" height="28" iconalign="left" borderwidth="1" shadow="1 1 2 0 #d0d0d0" borderstyle="solid" click="btn_upload_click" bordercolor="#C6C6C6" visible="false"></xwing:button>
+			<xwing:button id="btn_del_all" value="전체삭제" left="318" top="17" anchor="none" styles="btn_action" width="60" tabindex="4" height="25" iconalign="left" borderwidth="0" shadow="0 0 0 " click="btn_del_all_click" borderstyle="none" visible="false"></xwing:button>
 		</xwing:panel>
 		<xwing:datagrid id="grd_code" left="532" top="106" binddataset="DS_CODE" width="503" height="440" anchor="all" click="grd_code_click" autofit="true" sortable="true" styles="table_border" resizable="true">
 			<xwing:datagrid-colgroup>
