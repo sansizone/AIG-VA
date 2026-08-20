@@ -44,7 +44,7 @@ class mssqldb(object):
         self.create_connection()
         #db = pymssql.connect(server=self._host, user=self._user, password=self._pwd, database=self._dbname)
         with self.db.cursor() as cursor: #
-            cursor.execute("SELECT top(20) A.UCID, B.CON_ENT_DGN_NO, A.CONTENT, A.RXTX_GB \
+            cursor.execute("SELECT top(50) A.UCID, B.CON_ENT_DGN_NO, A.CONTENT, A.RXTX_GB \
                               FROM ms_stt_rslt_merge A, ms_stt_meta B \
                              WHERE A.UCID=B.UCID AND B.STT_FLAG='Y' AND B.TA_FLAG='N' AND B.BATCH_YN='N' AND A.ENC_FLAG='N' \
                              ORDER BY B.CON_ENT_DGN_NO ")
@@ -65,13 +65,16 @@ class mssqldb(object):
         with self.db.cursor() as cursor:
             sql = "SELECT A.SC_SNO, A.SC_LCLF_CD, A.SC_SCLF_CD, A.QST_CD, A.CNTR_CD, S.CTRA_INSA_CLCD, A.SCRIPT_SENT_ID, A.QST_RATE, A.QST_KEYWORD, A.SCRIPT_TA_SENT  \
                              FROM ms_script_sent A, \
-                           		 (SELECT X.UCID, X.CON_ENT_DGN_NO, X.PROD_CD, X.DMBO_CD, CS.Items AS CTRA_INSA_CLCD, X.SC_LCLF_CD, X.CENTERCD, X.G_AGE, X.P_AGE, X.CON_CON_NA_Y_CNT  \
-                   					FROM (SELECT A.UCID, A.CON_ENT_DGN_NO, A.PROD_CD,A.DMBO_CD,A.CTRA_INSA_CLCD,A.SC_LCLF_CD,A.CENTERCD,A.G_AGE,A.P_AGE,A.CON_CON_NA_Y_CNT  \
+                           		 (SELECT X.UCID, X.CON_ENT_DGN_NO, X.PROD_CD, X.DMBO_CD, CS.Items AS CTRA_INSA_CLCD, X.SC_LCLF_CD, X.CENTERCD, X.G_AGE, X.P_AGE, X.CON_CON_NA_Y_CNT, X.P_INSUR_AGE,  \
+                   					X.APT_CHK_TYPE, X.HOME_CHK_TYPE, X.FNNCL_SPEC, X.FNNCL_SPEC_YN  \
+                   					FROM (SELECT A.UCID, A.CON_ENT_DGN_NO, A.PROD_CD,A.DMBO_CD,A.CTRA_INSA_CLCD,A.SC_LCLF_CD,A.CENTERCD,A.G_AGE,A.P_AGE,A.CON_CON_NA_Y_CNT,A.P_INSUR_AGE,  \
+                			        	    A.APT_CHK_TYPE, A.HOME_CHK_TYPE, A.FNNCL_SPEC, A.FNNCL_SPEC_YN \
                 			        	    FROM ms_stt_meta A  \
                 			         	   WHERE A.STT_FLAG='Y'  \
                 			         		 AND A.UCID = %s AND A.CON_ENT_DGN_NO = %s ) X cross apply (SELECT Items FROM fn_split_string(X.CTRA_INSA_CLCD,',')) CS \
                 			       ) S \
                             WHERE A.EXCEPT_YN <> 'Y'  \
+							  AND A.DEL_YN <> 'Y' \
                               AND A.SC_SNO IN (SELECT SC_SNO FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = S.PROD_CD AND USE_YN='Y'   \
                                                                               AND CTRA_INSA_CLCD IN (SELECT Items FROM fn_split_string(S.CTRA_INSA_CLCD,','))   \
                                                                               AND SC_LCLF_CD IN (SELECT Items FROM fn_split_string(S.SC_LCLF_CD,',')))  \
@@ -83,10 +86,13 @@ class mssqldb(object):
                                                                                                             AND CNTR_CD = S.CENTERCD) = 0 THEN '00000' ELSE S.CENTERCD END )   \
                               AND (A.QST_KIND_CD = 'A' OR A.QST_KIND_CD ='E'  \
                                OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='B' AND CNTR_CD = A.CNTR_CD AND QST_COND IN (SELECT Items FROM fn_split_string(S.DMBO_CD,',')) ) )  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='C' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.P_AGE) )     \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='C' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.P_INSUR_AGE) )     \
                                OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='D' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.CON_CON_NA_Y_CNT) )     \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='F' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  )"
-
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='F' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='G' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='H' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.APT_CHK_TYPE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='I' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.HOME_CHK_TYPE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD =S.FNNCL_SPEC AND CNTR_CD = A.CNTR_CD AND QST_COND = S.FNNCL_SPEC_YN) ) )" 
             cursor.execute(sql, (_textid, _con_ent_dgn_no) )
 
             resultset = cursor.fetchall()
@@ -101,18 +107,28 @@ class mssqldb(object):
     def register_sent_similarity(self, _textid, _result_set):
         self.create_connection()
         #db = pymssql.connect(server=self._host, user=self._user, password=self._pwd, database=self._dbname, charset='utf8')
-        with self.db.cursor() as cursor:
-            sql = "INSERT INTO ms_regu_score (CON_ENT_DGN_NO, UCID, SC_SNO, SC_LCLF_CD, SC_SCLF_CD, QST_CD, CNTR_CD, CTRA_INSA_CLCD, \
-                                             SCRIPT_SENT_ID, STT_SENT_ID, START_TIME, TA_SCORE) \
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,\
-                                %s,%s,%s,%s);"
-            for r_set in _result_set:
-                for c_set in r_set[1]:
-                    #r_set[0],
-                    cursor.execute( sql, (c_set[0], _textid, c_set[2], c_set[3], c_set[4], c_set[5], c_set[6], c_set[7], \
-                                          c_set[8], c_set[9], c_set[10], str(round(c_set[11]*100)) ) )
-                    self.db.commit()
-        self.db.close()
+        try:
+            with self.db.cursor() as cursor:
+                sql = "IF NOT EXISTS \
+    								(SELECT * \
+    								   FROM ms_regu_score \
+    							      WHERE CON_ENT_DGN_NO=%s AND UCID=%s AND QST_CD=%s AND SCRIPT_SENT_ID=%s AND STT_SENT_ID=%s) \
+    				  INSERT INTO  ms_regu_score (CON_ENT_DGN_NO, UCID, SC_SNO, SC_LCLF_CD, SC_SCLF_CD, QST_CD, CNTR_CD, CTRA_INSA_CLCD,  \
+                                                  SCRIPT_SENT_ID, STT_SENT_ID, START_TIME, TA_SCORE)  \
+                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,\
+                              %s,%s,%s,%s);"
+                for r_set in _result_set:
+                    for c_set in r_set[1]:
+                        #r_set[0],
+                        cursor.execute( sql, (c_set[0], _textid, c_set[5], c_set[8], c_set[9], \
+                                              c_set[0], _textid, c_set[2], c_set[3], c_set[4], c_set[5], c_set[6], c_set[7], \
+                                              c_set[8], c_set[9], c_set[10], str(round(c_set[11]*100)) ) )
+                        self.db.commit()
+        except Exception, e:
+            raise e
+            self.db.rollback()
+        finally :
+            self.db.close()
 
 
     """
@@ -122,11 +138,34 @@ class mssqldb(object):
         self.create_connection()
         #db = pymssql.connect(server=self._host, user=self._user, password=self._pwd, database=self._dbname)
         now=datetime.datetime.now()
-        with self.db.cursor() as cursor:
-            sql = "UPDATE ms_stt_meta SET TA_FLAG = %s, TA_R_TIME = %s WHERE UCID = %s AND CON_ENT_DGN_NO = %s;"
-            cursor.execute( sql, (_flag, now.strftime('%Y%m%d%H%M%S'), _textid, _conid) )
-            self.db.commit()
+        try:
+            with self.db.cursor() as cursor:
+                sql = "UPDATE ms_stt_meta SET TA_FLAG = %s, TA_R_TIME = %s WHERE UCID = %s AND CON_ENT_DGN_NO = %s;"
+                cursor.execute( sql, (_flag, now.strftime('%Y%m%d%H%M%S'), _textid, _conid) )
+                self.db.commit()
+        except Exception, e:
+            raise e
+            self.db.rollback()
+        finally :
+            self.db.close()
+
+
+    """
+        Check ta flag (S)
+    """
+    def check_flag(self) :
+        self.create_connection()
+        with self.db.cursor() as cursor: #
+            cursor.execute("SELECT UCID, CON_ENT_DGN_NO \
+                              FROM ms_stt_meta  \
+                             WHERE TA_FLAG='S' \
+                               AND DATEDIFF(minute, substring(ta_r_time,1,4)+'-'+substring(ta_r_time,5,2)+'-'+substring(ta_r_time,7,2)+' '+substring(ta_r_time,9,2)+':'+substring(ta_r_time,11,2)+':'+substring(ta_r_time,13,2), GETDATE()) >= 60 ")
+            resultset = cursor.fetchall()
+            return resultset   # tuple that contains tuples (( , ), ( , ), ....)
         self.db.close()
+
+
+
 
 
     """
