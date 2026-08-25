@@ -1,0 +1,4434 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<query-collection>
+
+	<sql-service name="oba.oba020p1.getSent.sel" datasource="is_stat" paging="false" type="prepared">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_SCRIPT</result-name>
+		<query><![CDATA[
+			select SENTENCE
+					,(SELECT STT_SENT FROM vs_regu_score WHERE SENT_ID = sc.SENT_ID AND SCORE = sc.SCORE ) STT_SENT
+					,ROUND(CONVERT(float, sc.SCORE)*100,2) SCORE
+			from (SELECT SENT_ID,MAX(SCORE) SCORE FROM vs_regu_score where rec_key = ?rec_key group by SENT_ID) sc
+			left outer join vs_regu_sent st
+			on sc.sent_id = st.sent_id
+			where st.script_id = ?script_id
+			order by SCORE DESC
+		]]></query>
+	</sql-service>
+
+	 <sql-service name="oba.oba010.vrsScoreResult.cedno.cnt.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+			SELECT count(*) totalcount FROM(
+			  SELECT MAX(B.CON_ENT_DGN_DATE) as CED_DATE
+					  ,S.CON_ENT_DGN_NO CED_NO
+					  ,MAX(S.USER_ID) USER_ID
+					  ,CONCAT((SELECT USER_NAME FROM MS_USERMASTER WHERE USER_ID =  MAX(S.USER_ID)) , '(' ,  MAX(S.USER_ID), ')') AS USER_NAME
+					  ,(SELECT COUNT(UCID) FROM ms_stt_meta M WHERE M.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?anl_stat) CALL_CNT
+					  ,(SELECT SUM(Y.DURATION) from (SELECT UCID FROM ms_stt_meta M WHERE M.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'  ?anl_stat) Z, ms_stt_rslt_merge Y WHERE Z.UCID=Y.UCID) AS RECODE_TIME
+					  ,MAX(S.ISTP_NM) ISTP_NM
+					  ,MAX(S.PROD_NM) PROD_NM
+					  ,(SELECT STUFF((
+									SELECT ',' + code_name
+									FROM ms_codebook Z
+								 where Z.CODE_ID in  (SELECT Items FROM dbo.fn_split_string(MAX(S.CTRA_INSA_CLCD), ','))
+								  AND CODE_TYPE ='SYS105'  AND CODE_ID <> '00'
+									FOR XML PATH('')
+							   ),1,1,'')) AS CIC 
+					  ,CONVERT(INT,MAX(S.SCORE1)) SCORE1
+					  ,CONVERT(INT,ISNULL(MAX(S.SCORE2),0)) SCORE2
+					  ,CASE WHEN LEN(MAX(S.CTRA_INSA_CLCD)) = 1 THEN CONVERT(INT,MAX(S.SCORE1))
+					  ELSE CASE WHEN MAX(S.SCORE1) > MAX(S.SCORE2) THEN CONVERT(INT,MAX(S.SCORE2)) WHEN  MAX(S.SCORE1)<= MAX(S.SCORE2) THEN CONVERT(INT,MAX(S.SCORE1)) END END REG_SCORE
+			 FROM ms_regu_sum S,  
+			 		(SELECT 
+							CON_ENT_DGN_NO,
+							CON_ENT_DGN_DATE
+						  FROM ms_stt_meta M
+						  WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+						   ?anl_stat
+						  GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+					  ) B
+			 WHERE 1=1
+			 and S.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			 ?org1_cd
+			 ?org2_flag
+			 ?org3_cd
+			 ?user_id
+			 ?istp_cd
+			 ?prod_cd
+			 ?ced_no
+			 ?new_user_id
+			 ?grade
+			 GROUP BY S.CON_ENT_DGN_NO
+			) aa
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND S.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND S.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND S.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND S.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where S.CON_ENT_DGN_NO=Z.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+		</sql-service> 
+
+	 <sql-service name="oba.oba010.vrsScoreResult.cedno.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+			  SELECT MAX(B.CON_ENT_DGN_DATE) as CED_DATE
+					  ,S.CON_ENT_DGN_NO CED_NO
+					  ,MAX(S.USER_ID) USER_ID
+					  ,CONCAT((SELECT USER_NAME FROM MS_USERMASTER WHERE USER_ID =  MAX(S.USER_ID)) , '(' ,  MAX(S.USER_ID), ')') AS USER_NAME
+					  ,(SELECT COUNT(UCID) FROM ms_stt_meta M WHERE M.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'  ?anl_stat) CALL_CNT
+					  ,(SELECT SUM(Y.DURATION) from (SELECT UCID FROM ms_stt_meta M WHERE M.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'  ?anl_stat) Z, ms_stt_rslt_merge Y WHERE Z.UCID=Y.UCID) AS RECODE_TIME
+					  ,MAX(S.ISTP_NM) ISTP_NM
+					  ,MAX(S.PROD_NM) PROD_NM
+					  ,(SELECT STUFF((
+									SELECT ',' + code_name
+									FROM ms_codebook Z
+								 where Z.CODE_ID in  (SELECT Items FROM dbo.fn_split_string(MAX(S.CTRA_INSA_CLCD), ','))
+								  AND CODE_TYPE ='SYS105'  AND CODE_ID <> '00'
+									FOR XML PATH('')
+							   ),1,1,'')) AS CIC 
+					  ,CONVERT(INT,MAX(S.SCORE1)) SCORE1
+					  ,CONVERT(INT,ISNULL(MAX(S.SCORE2),0)) SCORE2
+					  ,CASE WHEN LEN(MAX(S.CTRA_INSA_CLCD)) = 1 THEN CONVERT(INT,MAX(S.SCORE1))
+					  ELSE CASE WHEN MAX(S.SCORE1) > MAX(S.SCORE2) THEN CONVERT(INT,MAX(S.SCORE2)) WHEN  MAX(S.SCORE1)<= MAX(S.SCORE2) THEN CONVERT(INT,MAX(S.SCORE1)) END END REG_SCORE
+			 FROM ms_regu_sum S,  
+			 		(SELECT 
+							CON_ENT_DGN_NO,
+							CON_ENT_DGN_DATE
+						  FROM ms_stt_meta M
+						  WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+						   ?anl_stat
+						  GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+					  ) B
+			 WHERE 1=1
+			 and S.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			 ?org1_cd
+			 ?org2_flag
+			 ?org3_cd
+			 ?user_id
+			 ?istp_cd
+			 ?prod_cd
+			 ?ced_no
+			 ?new_user_id
+			 ?grade
+			 GROUP BY S.CON_ENT_DGN_NO
+			 ORDER BY MAX(CON_ENT_DGN_DATE) DESC, S.CON_ENT_DGN_NO
+			 OFFSET  CONVERT(INT,?_START) ROWS
+ 			 FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND S.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND S.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND S.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND S.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where S.CON_ENT_DGN_NO=Z.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+		</sql-service> 
+		
+		<sql-service name="oba.oba010.vrsScoreResult.cedno.all.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+			  SELECT MAX(B.CON_ENT_DGN_DATE) as CED_DATE
+					  ,S.CON_ENT_DGN_NO CED_NO
+					  ,MAX(S.USER_ID) USER_ID
+					  ,CONCAT((SELECT USER_NAME FROM MS_USERMASTER WHERE USER_ID =  MAX(S.USER_ID)) , '(' ,  MAX(S.USER_ID), ')') AS USER_NAME
+					  ,(SELECT COUNT(UCID) FROM ms_stt_meta M WHERE M.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'  ?anl_stat) CALL_CNT
+					  ,(SELECT SUM(Y.DURATION) from (SELECT UCID FROM ms_stt_meta M WHERE M.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'  ?anl_stat) Z, ms_stt_rslt_merge Y WHERE Z.UCID=Y.UCID) AS RECODE_TIME
+					  ,MAX(S.ISTP_NM) ISTP_NM
+					  ,MAX(S.PROD_NM) PROD_NM
+					  ,(SELECT STUFF((
+									SELECT ',' + code_name
+									FROM ms_codebook Z
+								 where Z.CODE_ID in  (SELECT Items FROM dbo.fn_split_string(MAX(S.CTRA_INSA_CLCD), ','))
+								  AND CODE_TYPE ='SYS105'  AND CODE_ID <> '00'
+									FOR XML PATH('')
+							   ),1,1,'')) AS CIC 
+					  ,CONVERT(INT,MAX(S.SCORE1)) SCORE1
+					  ,CONVERT(INT,ISNULL(MAX(S.SCORE2),0)) SCORE2
+					  ,CASE WHEN LEN(MAX(S.CTRA_INSA_CLCD)) = 1 THEN CONVERT(INT,MAX(S.SCORE1))
+					  ELSE CASE WHEN MAX(S.SCORE1) > MAX(S.SCORE2) THEN CONVERT(INT,MAX(S.SCORE2)) WHEN  MAX(S.SCORE1)<= MAX(S.SCORE2) THEN CONVERT(INT,MAX(S.SCORE1)) END END REG_SCORE
+			 FROM ms_regu_sum S,  
+			 		(SELECT 
+							CON_ENT_DGN_NO,
+							CON_ENT_DGN_DATE
+						  FROM ms_stt_meta M
+						  WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+						   ?anl_stat
+						  GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+					  ) B
+			 WHERE 1=1
+			 and S.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			 ?org1_cd
+			 ?org2_flag
+			 ?org3_cd
+			 ?user_id
+			 ?istp_cd
+			 ?prod_cd
+			 ?ced_no
+			 ?new_user_id
+			 ?grade
+			 GROUP BY S.CON_ENT_DGN_NO
+			 ORDER BY MAX(CON_ENT_DGN_DATE) DESC, S.CON_ENT_DGN_NO
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND S.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND S.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND S.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND S.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where S.CON_ENT_DGN_NO=Z.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service> 
+		
+	<sql-service name="oba.oba010.vrsScoreResult.org.cnt.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+			SELECT count(*) totalcount FROM(
+				SELECT
+					   TREATYBRHCD ORG2_CD
+					  ,TREATYDEPTCD ORG3_CD
+					  ,S.USER_ID
+					  ,MAX(TREATYHQNM) ORG1_NM
+					  ,MAX(TREATYBRHNM) ORG2_NM
+					  ,MAX(TREATYDEPTNM) ORG3_NM
+					  ,CONCAT((SELECT USER_NAME FROM MS_USERMASTER WHERE USER_ID = S.USER_ID) , '(' , S.USER_ID, ')') AS USER_NAME
+					  ,(SELECT COUNT(1) CED_CNT FROM (SELECT DISTINCT CON_ENT_DGN_NO FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) R ) AS CED_CNT
+					  ,(SELECT COUNT(1) CALL_CNT FROM (SELECT UCID FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) R ) AS CALL_CNT
+					  ,(SELECT SUM(Y.DURATION) from (SELECT UCID FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) Z, ms_stt_rslt_merge Y WHERE Z.UCID=Y.UCID) AS RECODE_TIME
+					  ,CONVERT(INT,ROUND(AVG(C.SUB_REG_SCORE),0,0)) REG_SCORE						  
+			from  ms_regu_sum S,
+			   (SELECT A.CON_ENT_DGN_NO, 
+						CASE WHEN LEN(B.CTRA_INSA_CLCD) = 1 THEN B.SCORE1
+							 ELSE CASE WHEN B.SCORE1 > B.SCORE2 THEN B.SCORE2 WHEN  B.SCORE1<= B.SCORE2 THEN B.SCORE1 END END SUB_REG_SCORE
+				FROM (
+					SELECT CON_ENT_DGN_NO, USER_ID FROM ms_stt_meta M WITH(NOLOCK)
+					WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+					?anl_stat
+			 		?istp_cd
+			        ?prod_cd
+			        ?user_id
+			 		?ced_no
+					GROUP BY CON_ENT_DGN_NO, USER_ID
+				) A, ms_regu_sum B WITH(NOLOCK)
+				WHERE A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+				AND A.USER_ID = B.USER_ID 
+			   ) C
+				WHERE S.CON_ENT_DGN_NO = C.CON_ENT_DGN_NO
+		 		?org1_cd
+				?org2_flag
+				?org3_cd
+				?new_user_id
+				?grade
+			 GROUP BY TREATYHQCD,TREATYBRHCD,TREATYDEPTCD,S.USER_ID
+			
+			) aa
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where Z.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name="oba.oba010.vrsScoreResult.org.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_LIST1</result-name>
+		<query><![CDATA[
+			SELECT
+					   TREATYBRHCD ORG2_CD
+					  ,TREATYDEPTCD ORG3_CD
+					  ,S.USER_ID
+					  ,MAX(TREATYHQNM) ORG1_NM
+					  ,MAX(TREATYBRHNM) ORG2_NM
+					  ,MAX(TREATYDEPTNM) ORG3_NM
+					  ,CONCAT((SELECT USER_NAME FROM MS_USERMASTER WHERE USER_ID = S.USER_ID) , '(' , S.USER_ID, ')') AS USER_NAME
+					  ,(SELECT COUNT(1) CED_CNT FROM (SELECT DISTINCT CON_ENT_DGN_NO FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) R ) AS CED_CNT
+					  ,(SELECT COUNT(1) CALL_CNT FROM (SELECT UCID FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) R ) AS CALL_CNT
+					  ,(SELECT SUM(Y.DURATION) from (SELECT UCID FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) Z, ms_stt_rslt_merge Y WHERE Z.UCID=Y.UCID) AS RECODE_TIME
+					  ,CONVERT(INT,ROUND(AVG(C.SUB_REG_SCORE),0,0)) REG_SCORE
+			FROM  ms_regu_sum S,
+			   (SELECT A.CON_ENT_DGN_NO, 
+						CASE WHEN LEN(B.CTRA_INSA_CLCD) = 1 THEN B.SCORE1
+							 ELSE CASE WHEN B.SCORE1 > B.SCORE2 THEN B.SCORE2 WHEN  B.SCORE1<= B.SCORE2 THEN B.SCORE1 END END SUB_REG_SCORE
+				FROM (
+					SELECT CON_ENT_DGN_NO, USER_ID FROM ms_stt_meta M WITH(NOLOCK)
+					WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+					?anl_stat
+			 		?istp_cd
+			        ?prod_cd
+			        ?user_id
+			 		?ced_no
+			 		
+					GROUP BY CON_ENT_DGN_NO, USER_ID
+				) A, ms_regu_sum B WITH(NOLOCK)
+				WHERE A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+				AND A.USER_ID = B.USER_ID 
+			   ) C
+				WHERE S.CON_ENT_DGN_NO = C.CON_ENT_DGN_NO
+		 		?org1_cd
+				?org2_flag
+				?org3_cd
+				?new_user_id
+				?grade
+			 GROUP BY TREATYHQCD,TREATYBRHCD,TREATYDEPTCD,S.USER_ID
+			 ORDER BY TREATYHQCD, TREATYBRHCD,TREATYDEPTCD,S.USER_ID
+		     OFFSET  CONVERT(INT,?_START) ROWS
+			 FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+			
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where Z.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name="oba.oba010.vrsScoreResult.org.all.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_LIST1</result-name>
+		<query><![CDATA[
+		
+			SELECT
+					   TREATYBRHCD ORG2_CD
+					  ,TREATYDEPTCD ORG3_CD
+					  ,S.USER_ID
+					  ,MAX(TREATYHQNM) ORG1_NM
+					  ,MAX(TREATYBRHNM) ORG2_NM
+					  ,MAX(TREATYDEPTNM) ORG3_NM
+					  ,CONCAT((SELECT USER_NAME FROM MS_USERMASTER WHERE USER_ID = S.USER_ID) , '(' , S.USER_ID, ')') AS USER_NAME
+					  ,(SELECT COUNT(1) CED_CNT FROM (SELECT DISTINCT CON_ENT_DGN_NO FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) R ) AS CED_CNT
+					  ,(SELECT COUNT(1) CALL_CNT FROM (SELECT UCID FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) R ) AS CALL_CNT
+					  ,(SELECT SUM(Y.DURATION) from (SELECT UCID FROM ms_stt_meta M WHERE M.USER_ID = S.USER_ID  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' ?istp_cd ?prod_cd ?ced_no ?grade ?anl_stat) Z, ms_stt_rslt_merge Y WHERE Z.UCID=Y.UCID) AS RECODE_TIME
+					  ,CONVERT(INT,ROUND(AVG(C.SUB_REG_SCORE),0,0)) REG_SCORE
+					  
+			FROM  ms_regu_sum S,
+			   (SELECT A.CON_ENT_DGN_NO, 
+						CASE WHEN LEN(B.CTRA_INSA_CLCD) = 1 THEN B.SCORE1
+							 ELSE CASE WHEN B.SCORE1 > B.SCORE2 THEN B.SCORE2 WHEN  B.SCORE1<= B.SCORE2 THEN B.SCORE1 END END SUB_REG_SCORE
+				FROM (
+					SELECT CON_ENT_DGN_NO, USER_ID FROM ms_stt_meta M WITH(NOLOCK)
+					WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+					?anl_stat
+			 		?istp_cd
+			        ?prod_cd
+			        ?user_id
+			 		?ced_no
+			 		
+					GROUP BY CON_ENT_DGN_NO, USER_ID
+				) A, ms_regu_sum B WITH(NOLOCK)
+				WHERE A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+				AND A.USER_ID = B.USER_ID 
+			   ) C
+				WHERE S.CON_ENT_DGN_NO = C.CON_ENT_DGN_NO
+		 		?org1_cd
+				?org2_flag
+				?org3_cd
+				?new_user_id
+				?grade
+			 GROUP BY TREATYHQCD,TREATYBRHCD,TREATYDEPTCD,S.USER_ID
+			 ORDER BY TREATYHQCD, TREATYBRHCD,TREATYDEPTCD,S.USER_ID
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where Z.CON_ENT_DGN_NO=S.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name="oba.oba010.vrsScoreResult.product.cnt.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+		SELECT count(*) totalcount FROM(
+ 		SELECT
+			 		 S.ISTP_CD
+					 ,MAX(S.ISTP_NM) ISTP_NM
+					 ,S.PROD_CD
+					 ,MAX(S.PROD_NM) PROD_NM
+					,CONVERT(INT,ROUND(AVG(C.SUB_REG_SCORE),0,0)) REG_SCORE
+			 from  ms_regu_sum S , (SELECT 
+							CON_ENT_DGN_NO,
+							CON_ENT_DGN_DATE
+						  FROM ms_stt_meta M
+						  WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+						   ?anl_stat
+			 			   ?istp_cd
+			 			   ?prod_cd
+			 			   ?user_id
+			 			   ?ced_no
+			 			   ?grade
+			 			   ?anl_stat				
+						  GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+					  ) B,
+					  (select
+					  		  CON_ENT_DGN_NO,
+					  		  ISTP_CD,
+					  		  PROD_CD,
+							  CASE WHEN LEN(A.CTRA_INSA_CLCD) = 1 THEN A.SCORE1
+							  ELSE CASE WHEN A.SCORE1 > A.SCORE2 THEN A.SCORE2 WHEN  A.SCORE1 <= A.SCORE2 THEN A.SCORE1 END END SUB_REG_SCORE
+						from ms_regu_sum A
+					--	group by ISTP_CD,PROD_CD,A.SCORE1,A.SCORE2
+					   ) C -- 상품의 최종 SCORE
+			 WHERE 1=1
+			 and S.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			 and S.CON_ENT_DGN_NO=C.CON_ENT_DGN_NO
+			 ?org1_cd
+			 ?org2_flag
+			 ?org3_cd
+			 ?new_user_id
+			 GROUP BY  S.ISTP_CD,S.PROD_CD
+			 ) aa
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where Z.CON_ENT_DGN_NO=M.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+		<sql-service name="oba.oba010.vrsScoreResult.product.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_LIST2</result-name>
+		<query><![CDATA[
+ 		SELECT
+			 		 S.ISTP_CD
+					 ,MAX(S.ISTP_NM) ISTP_NM
+					 ,S.PROD_CD
+					 ,MAX(S.PROD_NM) PROD_NM
+					,CONVERT(INT,ROUND(AVG(C.SUB_REG_SCORE),0,0)) REG_SCORE
+			 from  ms_regu_sum S , (SELECT 
+							CON_ENT_DGN_NO,
+							CON_ENT_DGN_DATE
+						  FROM ms_stt_meta M
+						  WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+						   ?anl_stat
+			 			   ?istp_cd
+			 			   ?prod_cd
+ 		 			       ?user_id
+			 			   ?ced_no
+			 			   ?grade
+			 			   ?anl_stat				
+						  GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+					  ) B,
+					  (select
+					  		  CON_ENT_DGN_NO,
+					  		  ISTP_CD,
+					  		  PROD_CD,
+							  CASE WHEN LEN(A.CTRA_INSA_CLCD) = 1 THEN A.SCORE1
+							  ELSE CASE WHEN A.SCORE1 > A.SCORE2 THEN A.SCORE2 WHEN  A.SCORE1 <= A.SCORE2 THEN A.SCORE1 END END SUB_REG_SCORE
+						from ms_regu_sum A
+					--	group by ISTP_CD,PROD_CD,A.SCORE1,A.SCORE2
+					   ) C -- 상품의 최종 SCORE
+			 WHERE 1=1
+			 and S.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			 and S.CON_ENT_DGN_NO=C.CON_ENT_DGN_NO
+			 ?org1_cd
+			 ?org2_flag
+			 ?org3_cd
+			 ?new_user_id
+			 GROUP BY  S.ISTP_CD,S.PROD_CD
+			 ORDER BY  S.ISTP_CD,S.PROD_CD
+			 OFFSET  CONVERT(INT,?_START) ROWS
+ 			 FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where Z.CON_ENT_DGN_NO=M.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name="oba.oba010.vrsScoreResult.product.all.sel" datasource="is_stat" paging="false" type="simple">
+		<description>스크립트결과가져오기</description>
+		<result-name>DS_LIST2</result-name>
+		<query><![CDATA[
+ 		SELECT
+			 		 S.ISTP_CD
+					 ,MAX(S.ISTP_NM) ISTP_NM
+					 ,S.PROD_CD
+					 ,MAX(S.PROD_NM) PROD_NM
+					,CONVERT(INT,ROUND(AVG(C.SUB_REG_SCORE),0,0)) REG_SCORE
+			 from  ms_regu_sum S , (SELECT 
+							CON_ENT_DGN_NO,
+							CON_ENT_DGN_DATE
+						  FROM ms_stt_meta M
+						  WHERE CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+						   ?anl_stat
+			 			   ?istp_cd
+			 			   ?prod_cd
+			 			   ?user_id
+			 			   ?ced_no
+			 			   ?grade
+			 			   ?anl_stat				
+						  GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+					  ) B,
+					  (select
+					  		  CON_ENT_DGN_NO,
+					  		  ISTP_CD,
+					  		  PROD_CD,
+							  CASE WHEN LEN(A.CTRA_INSA_CLCD) = 1 THEN A.SCORE1
+							  ELSE CASE WHEN A.SCORE1 > A.SCORE2 THEN A.SCORE2 WHEN  A.SCORE1 <= A.SCORE2 THEN A.SCORE1 END END SUB_REG_SCORE
+						from ms_regu_sum A
+					--	group by ISTP_CD,PROD_CD,A.SCORE1,A.SCORE2
+					   ) C -- 상품의 최종 SCORE
+			 WHERE 1=1
+			 and S.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			 and S.CON_ENT_DGN_NO=C.CON_ENT_DGN_NO
+			 ?org1_cd
+			 ?org2_flag
+			 ?org3_cd
+			 ?new_user_id
+			 GROUP BY  S.ISTP_CD,S.PROD_CD
+			 ORDER BY  S.ISTP_CD,S.PROD_CD
+		]]></query>
+		<parameter name='org1_cd' value="AND S.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND S.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND S.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND S.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND (select ISNULL(CHG_GRADE,GRADE) from ms_grade_sum Z where Z.CON_ENT_DGN_NO=M.CON_ENT_DGN_NO) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND S.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba020.getBanGroup.sel' datasource='is_stat' type="prepared">
+		<description>금지어그룹</description>
+		<result-name>DS_GRP_RES</result-name>
+		<query><![CDATA[
+				SELECT 
+				DISTINCT
+				ETC2 GRP_CD,
+				(SELECT CODE_NAME FROM ms_codebook WHERE CODE_TYPE ='VSS151' AND CODE_ID <> '00' AND CODE_ID=B.ETC2 AND USE_YN = 'Y') AS GRP_NM 
+				FROM ms_search_sum A WITH(NOLOCK) LEFT OUTER JOIN ms_codebook B WITH(NOLOCK) ON CODE_ID = A.MENT_CD
+					WHERE CODE_TYPE='VSS150'
+		 			AND CODE_ID <> '00'
+		 			AND TYPE='1'
+		 			AND CON_ENT_DGN_NO=?CED_NO
+					AND USE_YN ='Y'
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba020.getBanCode.sel' datasource='is_stat' type="prepared">
+		<description>금지어결과조회</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+		
+			SELECT A.CODE_ID, A.CODE_NAME
+			FROM (SELECT CODE_ID, CODE_NAME 
+				  FROM MS_CODEBOOK 
+				  WHERE CODE_TYPE='VSS150' --사용하지 않는 금칙어도 가져오도록 수정. 과거 분석 결과와 화면이 맞지 않기 때문에.
+				  AND CODE_ID <> '00' AND ETC2 = ?ban_grp) A LEFT OUTER JOIN  
+				 (SELECT B.MENT_CD
+				  FROM ms_search_sum B WITH(NOLOCK), 
+					  (SELECT CON_ENT_DGN_NO , CON_ENT_DGN_DATE
+					   FROM ms_stt_meta M WITH(NOLOCK), ms_usermaster B WITH(NOLOCK)
+					   WHERE CON_ENT_DGN_DATE between ?sdate and ?edate
+					   AND M.USER_ID=B.USER_ID
+					   AND M.SRC_FLAG = 'Y'
+					      ?istp_cd
+						  ?prod_cd
+						  ?user_id
+						  ?ced_no
+						  ?org1_cd
+						  ?org2_flag
+						  ?org3_cd
+						  ?new_user_id
+					   GROUP BY CON_ENT_DGN_NO, CON_ENT_DGN_DATE
+					  ) C
+				   WHERE C.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				   AND C.CON_ENT_DGN_DATE = B.BASE_DATE
+				   AND B.TYPE = '1'
+				) B ON A.CODE_ID = B.MENT_CD
+			GROUP BY A.CODE_ID, A.CODE_NAME
+		]]></query>
+		<parameter name='org1_cd' value="AND B.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = ?ORG2_CD"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND M.USER_ID IN (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+		<parameter name='new_user_id' value="AND M.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+		
+	<sql-service name='oba.oba020.getBannedTerms.cnt.sel' datasource='is_stat' type="simple">
+		<description>금지어결과조회</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+		SELECT count(*) totalcount FROM(
+				SELECT
+				   R.USER_ID,
+				    R.USER_NAME+'('+R.USER_ID+')' USER_NAME
+				   ?sql
+			FROM (
+				SELECT DISTINCT B.BASE_DATE,
+				--	   B.MENT_CD BAN_CD,
+				  STUFF((SELECT DISTINCT ',' +Z.MENT_CD FROM ms_search_sum Z WHERE Z.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO FOR XML PATH('')),1,1,'') AS BAN_CD,
+				--	  (select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = B.MENT_CD) BAN_KEYWORD,
+					   B.COUNT BAN_CNT,
+					   B.USER_ID,
+					   (SELECT USER_NAME FROM ms_usermaster WHERE USER_ID = B.USER_ID) AS USER_NAME,
+					   B.TREATYHQCD AS ORG1_CD,
+					   B.TREATYBRHCD AS ORG2_CD,
+					   B.TREATYDEPTCD AS ORG3_CD,
+					   A.CON_ENT_DGN_NO CED_NO,
+					   A.DURATION,
+					   A.CALL_CNT
+				FROM ms_search_sum B WITH(NOLOCK) INNER JOIN (SELECT 
+										M.CON_ENT_DGN_NO,
+										M.USER_ID,
+										SUM(Y.DURATION) DURATION,
+										COUNT(1) CALL_CNT,
+										CON_ENT_DGN_DATE
+									  FROM ms_stt_meta  M WITH(NOLOCK),  ms_stt_rslt_merge Y WITH(NOLOCK)
+									  WHERE M.UCID = Y.UCID 
+									  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+									  AND M.SRC_FLAG = 'Y'
+									  ?istp_cd
+									  ?prod_cd
+									  ?user_id
+									  ?ced_no
+									  GROUP BY CON_ENT_DGN_NO,M.USER_ID,CON_ENT_DGN_DATE
+								  ) A
+				ON A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+					WHERE B.BASE_DATE = A.CON_ENT_DGN_DATE
+					AND B.TYPE='1'
+					and B.BASE_DATE between '?SDATE' and '?EDATE'
+					?org1_cd
+					?org2_flag
+					?org3_cd
+					?new_user_id
+					and B.MENT_CD in (SELECT CODE_ID FROM ms_codebook WHERE CODE_TYPE='VSS150' and ETC2='?ban_grp')
+				) R
+				GROUP BY ?groupby
+				) AA
+		]]></query>
+		<parameter name='org1_cd' value="AND B.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND B.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba020.getBannedTerms.sel' datasource='is_stat' type="simple">
+		<description>금지어결과조회</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+				SELECT
+				   R.USER_ID,
+				    R.USER_NAME+'('+R.USER_ID+')' USER_NAME
+				   ?sql
+			FROM (
+				SELECT DISTINCT B.BASE_DATE,
+					   STUFF((SELECT DISTINCT ',' +Z.MENT_CD FROM ms_search_sum Z WITH(NOLOCK) WHERE Z.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO FOR XML PATH('')),1,1,'') AS BAN_CD,
+				--    B.MENT_CD BAN_CD	   
+				--	  (select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = B.MENT_CD) BAN_KEYWORD,
+					   B.COUNT BAN_CNT,
+					   B.USER_ID,
+					   (SELECT USER_NAME FROM ms_usermaster WHERE USER_ID = B.USER_ID) AS USER_NAME,
+					   B.TREATYHQCD AS ORG1_CD,
+					   B.TREATYBRHCD AS ORG2_CD,
+					   B.TREATYDEPTCD AS ORG3_CD,
+					   A.CON_ENT_DGN_NO CED_NO,
+					   A.DURATION,
+					   A.CALL_CNT
+				FROM ms_search_sum B WITH(NOLOCK) INNER JOIN (SELECT 
+										M.CON_ENT_DGN_NO,
+										M.USER_ID,
+										SUM(Y.DURATION) DURATION,
+										COUNT(1) CALL_CNT,
+										CON_ENT_DGN_DATE
+									  FROM ms_stt_meta  M WITH(NOLOCK),  ms_stt_rslt_merge Y WITH(NOLOCK)
+									  WHERE M.UCID = Y.UCID 
+									  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+									  AND M.SRC_FLAG = 'Y'
+									  ?istp_cd
+									  ?prod_cd
+									  ?user_id
+									  ?ced_no
+									  GROUP BY CON_ENT_DGN_NO,M.USER_ID,CON_ENT_DGN_DATE
+								  ) A
+				ON A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+					WHERE B.BASE_DATE = A.CON_ENT_DGN_DATE 
+					AND B.TYPE='1'
+					AND B.BASE_DATE between '?SDATE' and '?EDATE'
+					?org1_cd
+					?org2_flag
+					?org3_cd
+					?new_user_id
+					and B.MENT_CD in (SELECT CODE_ID FROM ms_codebook WITH(NOLOCK) WHERE CODE_TYPE='VSS150' and ETC2='?ban_grp')
+				) R
+				GROUP BY ?groupby
+				ORDER BY ?orderby
+				OFFSET  CONVERT(INT,?_START) ROWS
+				FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+
+		]]></query>
+		<parameter name='org1_cd' value="AND B.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND B.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba020.getBannedTerms.all.sel' datasource='is_stat' type="simple">
+		<description>금지어결과조회</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+				SELECT
+				   R.USER_ID,
+				    R.USER_NAME+'('+R.USER_ID+')' USER_NAME
+				   ?sql
+			FROM (
+				SELECT DISTINCT B.BASE_DATE,
+					  STUFF((SELECT DISTINCT ',' +Z.MENT_CD FROM ms_search_sum Z WITH(NOLOCK) WHERE Z.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO FOR XML PATH('')),1,1,'') AS BAN_CD,
+				--    B.MENT_CD BAN_CD	   
+				--		(select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = B.MENT_CD) BAN_KEYWORD,
+					   B.COUNT BAN_CNT,
+					   B.USER_ID,
+					   (SELECT USER_NAME FROM ms_usermaster WHERE USER_ID = B.USER_ID) AS USER_NAME,
+					   B.TREATYHQCD AS ORG1_CD,
+					   B.TREATYBRHCD AS ORG2_CD,
+					   B.TREATYDEPTCD AS ORG3_CD,
+					   A.CON_ENT_DGN_NO CED_NO,
+					   A.DURATION,
+					   A.CALL_CNT
+				FROM ms_search_sum B WITH(NOLOCK) INNER JOIN (SELECT 
+										M.CON_ENT_DGN_NO,
+										M.USER_ID,
+										SUM(Y.DURATION) DURATION,
+										COUNT(1) CALL_CNT,
+										CON_ENT_DGN_DATE
+									  FROM ms_stt_meta  M WITH(NOLOCK),  ms_stt_rslt_merge Y WITH(NOLOCK)
+									  WHERE M.UCID = Y.UCID
+									  AND CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' 
+									  AND M.SRC_FLAG = 'Y'
+									  ?istp_cd
+									  ?prod_cd
+									  ?user_id
+									  ?ced_no
+									  GROUP BY CON_ENT_DGN_NO,M.USER_ID,CON_ENT_DGN_DATE
+								  ) A
+				ON A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+					WHERE B.BASE_DATE = A.CON_ENT_DGN_DATE
+					AND B.TYPE='1'
+					and B.BASE_DATE between '?SDATE' and '?EDATE'
+					?org1_cd
+					?org2_flag
+					?org3_cd
+					?new_user_id
+					and B.MENT_CD in (SELECT CODE_ID FROM ms_codebook WHERE CODE_TYPE='VSS150' and ETC2='?ban_grp')
+				) R
+				GROUP BY ?groupby
+				ORDER BY ?orderby
+		]]></query>
+		<parameter name='org1_cd' value="AND B.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND B.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+<sql-service name='oba.oba020.getBannedTermsDetail.cnt.sel' datasource='is_stat' type="simple">
+		<description>금지어결과조회-상세조회</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+		SELECT count(*) totalcount FROM(
+			SELECT	M.UCID,
+					MAX(M.UCID_DATE) UCID_DATE,
+					 (SELECT Y.DURATION from ms_stt_rslt_merge Y WITH(NOLOCK) WHERE M.UCID=Y.UCID) AS DURATION,
+				    MAX(M.USER_ID) USER_ID,
+					(SELECT USER_NAME+'('+USER_ID+')' FROM ms_usermaster WITH(NOLOCK) WHERE USER_ID = MAX(M.USER_ID))  USER_NAME
+				    ?sql
+			FROM ms_stt_meta M WITH(NOLOCK) LEFT OUTER JOIN  ms_search_score S WITH(NOLOCK) ON M.UCID=S.UCID 
+																AND S.MENT_CD in (SELECT CODE_ID FROM ms_codebook WITH(NOLOCK) WHERE CODE_TYPE='VSS150' and ETC2='?ban_grp')
+																AND S.TYPE='1'
+			, ms_usermaster U WITH(NOLOCK)
+			WHERE  CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' 
+			AND M.USER_ID=U.USER_ID
+			AND M.SRC_FLAG = 'Y'												
+				?org1_cd
+				?org2_cd
+				?org3_cd
+				?user_id
+				?ced_no
+				?istp_cd
+				?prod_cd
+				?new_user_id
+			GROUP BY  M.UCID
+			) AA
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND U.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND U.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<!-- user_id 찍어보내는거라 IN 이 아님!! -->
+		<parameter name='user_id' value="AND U.USER_ID = '?USER_ID'" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND U.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba020.getBannedTermsDetail.sel' datasource='is_stat' type="simple">
+		<description>금지어결과조회-상세조회</description>
+		<result-name>DS_RES_DETAIL</result-name>
+		<query><![CDATA[
+			SELECT	M.UCID,
+					MAX(M.UCID_DATE) UCID_DATE,
+					 (SELECT Y.DURATION from ms_stt_rslt_merge Y WITH(NOLOCK) WHERE M.UCID=Y.UCID) AS DURATION,
+				    MAX(M.USER_ID) USER_ID,
+					(SELECT USER_NAME+'('+USER_ID+')' FROM ms_usermaster WITH(NOLOCK) WHERE USER_ID = MAX(M.USER_ID))  USER_NAME
+				    ?sql
+			FROM ms_stt_meta M WITH(NOLOCK) LEFT OUTER JOIN  ms_search_score S WITH(NOLOCK) ON M.UCID=S.UCID 
+																AND S.MENT_CD in (SELECT CODE_ID FROM ms_codebook WITH(NOLOCK) WHERE CODE_TYPE='VSS150' and ETC2='?ban_grp')
+																AND S.TYPE='1'
+			, ms_usermaster U WITH(NOLOCK)
+			WHERE  CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' 
+			AND M.USER_ID=U.USER_ID
+			AND M.SRC_FLAG = 'Y'										
+				?org1_cd
+				?org2_cd
+				?org3_cd
+				?user_id
+				?ced_no
+				?istp_cd
+				?prod_cd
+				?new_user_id
+			GROUP BY  M.UCID
+			ORDER BY MAX(M.UCID_DATE) DESC, M.UCID DESC
+			OFFSET  CONVERT(INT,?_START) ROWS
+			FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND U.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND U.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<!-- user_id 찍어보내는거라 IN 이 아님!! -->
+		<parameter name='user_id' value="AND U.USER_ID = '?USER_ID'" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND U.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba020.getBannedTermsDetail.all.sel' datasource='is_stat' type="simple">
+		<description>금지어결과조회-상세조회</description>
+		<result-name>DS_RES_DETAIL</result-name>
+		<query><![CDATA[
+			SELECT	M.UCID,
+					MAX(M.UCID_DATE) UCID_DATE,
+					 (SELECT Y.DURATION from ms_stt_rslt_merge Y WITH(NOLOCK) WHERE M.UCID=Y.UCID) AS DURATION,
+				    MAX(M.USER_ID) USER_ID,
+					(SELECT USER_NAME+'('+USER_ID+')' FROM ms_usermaster WITH(NOLOCK) WHERE USER_ID = MAX(M.USER_ID))  USER_NAME
+				    ?sql
+			FROM ms_stt_meta M WITH(NOLOCK) LEFT OUTER JOIN  ms_search_score S WITH(NOLOCK) ON M.UCID=S.UCID 
+																AND S.MENT_CD in (SELECT CODE_ID FROM ms_codebook WITH(NOLOCK) WHERE CODE_TYPE='VSS150' and ETC2='?ban_grp')
+																AND S.TYPE='1'
+			, ms_usermaster U WITH(NOLOCK)
+			WHERE  CON_ENT_DGN_DATE between '?SDATE' and '?EDATE' 
+			AND M.USER_ID=U.USER_ID
+			AND M.SRC_FLAG = 'Y'												
+				?org1_cd
+				?org2_cd
+				?org3_cd
+				?user_id
+				?ced_no
+				?istp_cd
+				?prod_cd
+				?new_user_id
+			GROUP BY  M.UCID
+			ORDER BY MAX(M.UCID_DATE) DESC, M.UCID DESC
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND U.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND U.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<!-- user_id 찍어보내는거라 IN 이 아님!! -->
+		<parameter name='user_id' value="AND U.USER_ID = '?USER_ID'" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND U.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba020p1.getBannedTerms.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>금지어결과조회-팝업용</description>
+		<result-name>DS_BANNED_RES</result-name>
+		<query><![CDATA[
+			SELECT c.CODE_ID AS BAN_ID
+				  ,c.CODE_NAME AS BAN_NM
+				  ,0 BAN_CNT
+				  ,b.STT_SENT
+				  ,(CASE WHEN b.BAN_ID IS NULL THEN 'N' ELSE 'Y' END) AS BAN_YN
+		    FROM (SELECT BAN_ID, STT_SENT FROM vs_ban_rslt WHERE REC_KEY = ?rec_key ) b
+		    RIGHT OUTER JOIN cs_codebook c
+		    ON b.BAN_ID = c.CODE_ID
+		    WHERE c.CODE_TYPE = 'VSS150'
+		    AND c.CODE_ID != '00'
+		    ORDER BY c.CODE_ID
+		]]></query>
+	</sql-service>
+
+	<sql-service name='oba.oba040.getBannedKeywordRank.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>금지어랭킹순위</description>
+		<result-name>DS_BAN_KEYWORDS</result-name>
+		<query><![CDATA[
+		SELECT 
+				TOP(50)
+				RANK() OVER(ORDER BY SUM(CONVERT(INT,COUNT)) DESC) RANK
+				   ,MENT_CD BAN_CD
+				   ,(select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = A.MENT_CD) BAN_KEYWORD
+				   ,SUM(CONVERT(INT,COUNT)) AS BAN_CNT
+			FROM ms_search_sum A INNER JOIN 
+				(SELECT CON_ENT_DGN_DATE, CON_ENT_DGN_NO FROM ms_stt_meta M WHERE CON_ENT_DGN_DATE BETWEEN '?SDATE' and '?EDATE' AND M.SRC_FLAG = 'Y' GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE ) B
+			ON A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO  AND TYPE = '1' 
+			?org1_cd
+			?org2_flag
+			?org3_cd
+			?user_id
+			?istp_cd
+			?prod_cd
+			?new_user_id
+			GROUP BY MENT_CD
+			ORDER BY SUM(CONVERT(INT,COUNT)) DESC, BAN_CD
+		]]></query>
+		<parameter name='org1_cd' value="AND A.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND A.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND A.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND A.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND A.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='new_user_id' value="AND A.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba040.getDailyBanKeyword.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>금지어DAILY순위</description>
+		<result-name>DS_BAN_DAILY</result-name>
+		<query><![CDATA[
+			SELECT	
+					SUBSTRING(B.BASE_DATE,0,?dateLen) AS DATE
+				   ,B.MENT_CD BAN_CD
+				    ,(select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = B.MENT_CD) BAN_KEYWORD
+				--	,B.CON_ENT_DGN_NO CED_NO
+				   ,SUM(CONVERT(INT,B.COUNT)) AS BAN_CNT
+			FROM ms_search_sum B INNER JOIN (SELECT CON_ENT_DGN_DATE, CON_ENT_DGN_NO FROM ms_stt_meta M WHERE CON_ENT_DGN_DATE BETWEEN '?SDATE' and '?EDATE' AND M.SRC_FLAG = 'Y' GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE ) A
+			ON A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO  AND TYPE = '1' 
+				AND B.MENT_CD = '?BAN_CD'
+				?org1_cd
+				?org2_flag
+				?org3_cd
+				?user_id
+				?istp_cd
+				?prod_cd
+				?new_user_id
+			GROUP BY SUBSTRING(B.BASE_DATE,0,?dateLen), B.MENT_CD
+		]]></query>
+		<parameter name='dateLen' value="" default="" >
+			<condition key="D" value="9"/>
+			<condition key="W" value="9"/>
+			<condition key="M" value="7"/>
+			<condition key="H" value="11"/>
+		</parameter>	
+		<parameter name='org1_cd' value="AND B.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND B.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND B.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND B.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND B.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba040.getBanKeywordCount.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>금지어건수 조회</description>
+		<result-name>DS_BAN_CNT</result-name>
+		<query><![CDATA[
+			SELECT COUNT(M.UCID) AS BAN_CNT
+				 , B.BAN_CD
+				 , B.BAN_KEYWORD
+			FROM ms_stt_meta M, ms_ban_sum B
+			WHERE M.UCID = B.UCID
+			AND B.BASE_DATE BETWEEN ?sdate AND ?edate
+			AND M.SRC_FLAG = 'Y'
+			AND B.BAN_CD IN (?ban_cd)
+			?org1_cd
+			?org2_flag
+			?org3_cd
+			?user_id
+			?new_user_id
+			GROUP BY M.UCID, B.BAN_CD, B.BAN_KEYWORD
+		]]></query>
+		<parameter name='org1_cd' value="AND B.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = ?ORG2_CD"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND B.USER_ID = ?USER_ID" default="" />
+		<parameter name='new_user_id' value="AND B.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba040.getAllCallCount.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>금칙어 콜 비율을 조회하기 위한 전체 콜 수 조회</description>
+		<result-name>DS_ALL_CNT</result-name>
+		<query><![CDATA[
+			SELECT COUNT(*) AS TOT_CNT
+			FROM ms_stt_meta M, ms_usermaster U
+			WHERE 1=1
+			AND M.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE'
+			AND M.USER_ID = U.USER_ID
+			AND M.SRC_FLAG = 'Y'
+			?org1_cd
+			?org2_flag
+			?org3_cd
+			?user_id
+			?istp_cd
+			?prod_cd
+			?new_user_id
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD  = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND U.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND U.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND U.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='new_user_id' value="AND U.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba040p1.getBanKeywordDeptRank.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>금지어 조직별 건수 조회</description>
+		<result-name>DS_BAN_CNT</result-name>
+		<query><![CDATA[
+			SELECT
+				TOP(50)
+				   RANK() OVER(ORDER BY SUM(CONVERT(INT,COUNT)) DESC) RANK,
+				   SUM(CONVERT(INT, COUNT)) AS BAN_CNT,
+				   TREATYHQCD AS ORG1_CD,
+				   TREATYBRHCD AS ORG2_CD,
+				   TREATYBRHNM AS ORG2_NM,
+				   TREATYDEPTCD AS ORG3_CD,
+				   TREATYDEPTNM AS ORG3_NM,
+				   USER_ID,
+				   (SELECT USER_NAME FROM ms_usermaster WHERE USER_ID = B.USER_ID)+'('+USER_ID+')' AS USER_NAME
+			FROM ms_search_sum B INNER JOIN (
+					SELECT CON_ENT_DGN_DATE, CON_ENT_DGN_NO FROM ms_stt_meta M WHERE CON_ENT_DGN_DATE BETWEEN '?SDATE' and '?EDATE' AND M.SRC_FLAG = 'Y' GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE 
+			)A ON A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+			WHERE TYPE='1'
+			AND BASE_DATE BETWEEN '?SDATE' and '?EDATE'
+			AND MENT_CD = '?ban_cd'
+			?org1_cd
+			?org2_flag
+			?org3_cd
+			?user_id
+			?istp_cd
+			?prod_cd
+			?new_user_id
+			GROUP BY TREATYHQCD, TREATYBRHCD,TREATYBRHNM,TREATYDEPTCD,TREATYDEPTNM,USER_ID
+			ORDER BY RANK() OVER(ORDER BY SUM(CONVERT(INT,COUNT)) DESC)
+		]]></query>
+		<parameter name='org1_cd' value="AND B.TREATYHQCD  = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter>
+		<parameter name='org3_cd' value="AND B.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND B.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND B.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND B.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='new_user_id' value="AND B.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba010t2.getVrsRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS문장 조회 - 팝업용</description>
+		<result-name>DS_SCRIPT_RES</result-name>
+		<query><![CDATA[
+			SELECT LCLF_CD,
+					  (SELECT SC_CDNM FROM tb_sc_code_mng t WHERE t.SC_CD = AA.LCLF_CD and TYPE_CD='L' and USE_YN ='Y') LCLF_NM
+					  ,SCLF_CD
+					  ,(SELECT SC_CDNM FROM tb_sc_code_mng t WHERE t.SC_CD = AA.SCLF_CD and TYPE_CD='S' and USE_YN ='Y') SCLF_NM
+					  ,CTRA_INSA_CLCD
+					  ,CONCAT(SUM(CASE WHEN SCORE > 0 THEN 1 ELSE 0 END), ' / ' , COUNT(1) ) AS REGU_Y_CNT
+					  ,ISNULL(CONVERT(INT,ROUND(AVG(SCORE),0,0)),0) AVG_SCORE
+				FROM (
+									SELECT
+										LCLF_CD, SCLF_CD, CTRA_INSA_CLCD, MAX(SCORE) AS SCORE
+									FROM
+										(SELECT
+												SC_LCLF_CD LCLF_CD
+												,SC_SCLF_CD SCLF_CD
+												,QST_CD
+												,SCRIPT_SENT_ID
+												,CTRA_INSA_CLCD
+												,SENT_SCORE SCORE
+												FROM ms_regu_score r 		--문장 준수한 테이블
+												WHERE CON_ENT_DGN_NO=?CED_NO
+												AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+										
+								UNION
+										SELECT
+												SC_LCLF_CD LCLF_CD
+												,SC_SCLF_CD SCLF_CD
+												,QST_CD
+												,SCRIPT_SENT_ID
+												,CTRA_INSA_CLCD
+												,SENT_SCORE SCORE
+											FROM MS_REGU_OMIT R			   --누락한 문장들 테이블
+											WHERE CON_ENT_DGN_NO=?CED_NO
+											AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+										) A
+								GROUP BY LCLF_CD, SCLF_CD, QST_CD,CTRA_INSA_CLCD, SCRIPT_SENT_ID
+					) AA
+					GROUP BY LCLF_CD,SCLF_CD,CTRA_INSA_CLCD
+		]]></query>
+	</sql-service>
+
+	<sql-service name='oba.oba010t2.getBanRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>금칙어요약 - 팝업용</description>
+		<result-name>DS_BAN_RES</result-name>
+		<query><![CDATA[
+					SELECT	C.CODE_ID BAN_CD,
+  							C.CODE_NAME AS BAN_KEYWORD,
+							CASE WHEN B.BAN_CD IS NULL THEN 'N' ELSE 'Y' END AS BAN_YN,
+							isnull(B.BAN_CNT,0) AS BAN_CNT
+						FROM
+							(SELECT
+									MENT_CD BAN_CD
+									,(select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = A.MENT_CD) BAN_NM
+									,count(1) BAN_CNT
+								FROM ms_search_score A, ms_stt_meta B
+							 WHERE A.UCID=B.UCID
+							 and  CON_ENT_DGN_NO=?CED_NO
+							 and TYPE='1'
+							 AND B.GRD_FLAG <> 'E'
+							 group by MENT_CD) B
+						RIGHT OUTER JOIN (SELECT CODE_ID, CODE_NAME FROM ms_codebook WHERE CODE_TYPE = 'VSS150' AND CODE_ID != 00 ?ban_cd) C
+						ON B.BAN_CD = C.CODE_ID
+						ORDER BY B.BAN_CNT DESC
+		]]></query>
+			<parameter name='ban_cd' value="AND CODE_ID = ?BAN_CD" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba010t2.getVrsRes.groupbyDate.sel'  datasource="is_stat" paging="false" type="prepared">
+			<description>VRS문장 조회 - 팝업용 - 차트데이터</description>
+			<result-name>DS_UD_VRS</result-name>
+			<query><![CDATA[
+				SELECT
+					A.UCID
+					,UCID_DATE DATE
+					,B.SC_SCLF_CD SCLF_CD
+					,(select SC_CDNM from tb_sc_code_mng t where t.SC_CD = B.SC_SCLF_CD and TYPE_CD='S' and USE_YN ='Y') SCLF_NM
+					,1 COUNT
+				FROM ms_stt_meta A, (SELECT UCID,CON_ENT_DGN_NO,SC_LCLF_CD,SC_SCLF_CD FROM ms_regu_score WHERE SENT_SCORE > 0 GROUP BY UCID,CON_ENT_DGN_NO,SC_LCLF_CD,SC_SCLF_CD) B
+				WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				AND A.CON_ENT_DGN_NO=?CED_NO
+				AND A.GRD_FLAG <> 'E'
+				GROUP BY B.SC_SCLF_CD, A.UCID,UCID_DATE
+				ORDER BY SCLF_CD, UCID_DATE ASC
+			]]></query>
+		</sql-service>
+
+		<sql-service name='oba.oba010t2.getBanRes.groupbyDate.sel'  datasource="is_stat" paging="false" type="prepared">
+				<description>VRS문장 조회 - 팝업용 - 차트데이터</description>
+				<result-name>DS_UD_BAN</result-name>
+				<query><![CDATA[
+							SELECT
+									B.UCID_DATE
+									,MENT_CD BAN_CD
+									,(select CODE_NAME from ms_codebook Z where CODE_TYPE='VSS150' and Z.CODE_ID = A.MENT_CD) BAN_NM
+									,count(1) BAN_CNT
+								FROM ms_stt_meta B , ms_search_score A
+							 where A.UCID=B.UCID and TYPE='1'
+							 and B.CON_ENT_DGN_NO=?CED_NO
+							 AND B.GRD_FLAG <> 'E'
+							 group by MENT_CD,UCID_DATE
+							ORDER BY BAN_CD,UCID_DATE
+				]]></query>
+	</sql-service>
+
+	<sql-service name='oba.oba010t3.getCtraRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>계피구분조회 - 팝업용</description>
+		<result-name>DS_SCRIPT_RES_CTRA</result-name>
+		<query><![CDATA[
+			SELECT
+				B.CODE_ID, B.CODE_NAME
+			FROM
+			(
+				  SELECT distinct CS.Items AS CTRA_INSA_CLCD
+					FROM ms_stt_meta X cross apply (SELECT Items FROM fn_split_string( X.CTRA_INSA_CLCD,',')) CS
+					WHERE CON_ENT_DGN_NO = ?CED_NO
+					AND X.GRD_FLAG <> 'E'
+			) A, ms_codebook B
+			WHERE B.CODE_TYPE = 'SYS105' 
+			  AND A.CTRA_INSA_CLCD = B.CODE_ID
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010t3.getSclfcd.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>소분류조회 - 팝업용</description>
+		<result-name>DS_SCRIPT_RES_SCLF</result-name>
+		<query><![CDATA[
+			SELECT AA.*,
+				SCLF_NM AS TEXT
+				,REGU_N_CNT TEXT_CNT
+		FROM (
+			SELECT LCLF_CD,
+					  (SELECT SC_CDNM FROM tb_sc_code_mng t WHERE t.SC_CD = AA.LCLF_CD and TYPE_CD='L' and USE_YN ='Y') LCLF_NM
+					  ,SCLF_CD
+					  ,(SELECT SC_CDNM FROM tb_sc_code_mng t WHERE t.SC_CD = AA.SCLF_CD and TYPE_CD='S' and USE_YN ='Y') SCLF_NM
+					  ,CTRA_INSA_CLCD
+					  ,CONCAT(SUM(CASE WHEN SCORE > 0 THEN 1 ELSE 0 END), '/' , COUNT(1) ) AS REGU_N_CNT
+				FROM (
+									SELECT
+										LCLF_CD, SCLF_CD, CTRA_INSA_CLCD, MAX(SCORE) AS SCORE
+									FROM
+										(SELECT
+												SC_LCLF_CD LCLF_CD
+												,SC_SCLF_CD SCLF_CD
+												,QST_CD
+												,SCRIPT_SENT_ID
+												,CTRA_INSA_CLCD
+												,SENT_SCORE SCORE
+												FROM ms_regu_score r 		--문장 준수한 테이블
+												WHERE CON_ENT_DGN_NO=?CED_NO
+												AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+										
+								UNION
+										SELECT
+												SC_LCLF_CD LCLF_CD
+												,SC_SCLF_CD SCLF_CD
+												,QST_CD
+												,SCRIPT_SENT_ID
+												,CTRA_INSA_CLCD
+												,SENT_SCORE SCORE
+											FROM MS_REGU_OMIT R			   --누락한 문장들 테이블
+											WHERE CON_ENT_DGN_NO=?CED_NO
+											AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+										) A
+								GROUP BY LCLF_CD, SCLF_CD, QST_CD,CTRA_INSA_CLCD, SCRIPT_SENT_ID
+					) AA
+					GROUP BY LCLF_CD,SCLF_CD,CTRA_INSA_CLCD
+			) AA 
+			
+			ORDER BY LCLF_CD,SCLF_CD
+		]]></query>
+	</sql-service>
+	
+	<!-- 
+	<sql-service name='oba.oba010t3.getSclfcd.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>소분류조회 - 팝업용</description>
+		<result-name>DS_SCRIPT_RES_SCLF</result-name>
+		<query><![CDATA[
+			SELECT
+				SC_SCLF_CD,
+				(select SC_CDNM from tb_sc_code_mng t where t.SC_CD = A.SC_SCLF_CD and TYPE_CD='S' and USE_YN ='Y') SCLF_NM,
+				CTRA_INSA_CLCD
+			FROM
+			(	
+			SELECT S.SC_LCLF_CD
+					,S.SC_SCLF_CD
+				   ,S.QST_CD
+				   ,R.QST_CDNM QST_NM
+				   ,CTRA_INSA_CLCD
+				   ,S.SCRIPT_SENT_ID SENT_ID
+				   ,SCRIPT_SENT = CAST(SCRIPT_SENT AS nvarchar(max))
+				   ,ISNULL(SENT_SCORE,0) SCORE
+				   ,R.SORTKEY
+			FROM (SELECT
+								*
+						FROM
+							(SELECT
+									CON_ENT_DGN_NO,
+									SC_SNO,
+									SC_LCLF_CD,
+									SC_SCLF_CD,
+									QST_CD,
+									CNTR_CD,
+									CTRA_INSA_CLCD,
+									SCRIPT_SENT_ID,
+									SENT_SCORE
+									FROM ms_regu_score r 	//문장 준수한 테이블
+									WHERE CON_ENT_DGN_NO=?CED_NO
+									AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+							) A
+					UNION
+						SELECT
+								*
+						FROM
+							(SELECT
+								    CON_ENT_DGN_NO,
+									SC_SNO,
+									SC_LCLF_CD,
+									SC_SCLF_CD,
+									QST_CD,
+									CNTR_CD,
+									CTRA_INSA_CLCD,
+									SCRIPT_SENT_ID,
+									SENT_SCORE
+								FROM MS_REGU_OMIT R			   		   //누락한 문장들 테이블
+								WHERE CON_ENT_DGN_NO=?CED_NO
+								AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+							) B ) S, ms_script_sent R
+			 WHERE S.SC_SNO=R.SC_SNO
+					AND S.SC_LCLF_CD=R.SC_LCLF_CD
+					AND S.SC_SCLF_CD=R.SC_SCLF_CD
+					AND S.QST_CD=R.QST_CD
+					AND S.CNTR_CD=R.CNTR_CD
+					AND S.SCRIPT_SENT_ID = R.SCRIPT_SENT_ID
+			GROUP BY S.SC_LCLF_CD,S.SC_SCLF_CD,S.QST_CD,R.QST_CDNM,CTRA_INSA_CLCD, S.SCRIPT_SENT_ID,CAST(SCRIPT_SENT AS nvarchar(max)),SENT_SCORE,SORTKEY
+		) A
+		GROUP BY CTRA_INSA_CLCD, SC_LCLF_CD,SC_SCLF_CD
+		ORDER BY CTRA_INSA_CLCD, SC_LCLF_CD,SC_SCLF_CD
+		]]></query>
+	</sql-service>
+	-->
+
+	<sql-service name='oba.oba010t3.getVrsDetailRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS문장 조회(상세조회) - 팝업용</description>
+		<result-name>DS_SCRIPT_RES</result-name>
+		<query><![CDATA[
+			SELECT
+				QST_CD,
+				QST_NM,
+				SC_SCLF_CD,
+				CTRA_INSA_CLCD,
+				SENT_ID,
+				SCRIPT_SENT,
+				QST_RATE,
+				CONVERT(INT,ROUND(MAX(SCORE),0,0)) SCORE,
+				CASE WHEN MAX(SCORE) = 0 THEN 'C'
+					 WHEN MAX(SCORE) >= QST_RATE AND MAX(SCORE) < (SELECT ETC2 FROM ms_codebook WHERE CODE_TYPE = 'VSS190' AND CODE_ID <> '00') THEN 'C'
+					 ELSE 'Y' END AS REGU_YN
+			FROM
+			(	
+			SELECT S.SC_LCLF_CD
+					,S.SC_SCLF_CD
+				   ,S.QST_CD
+				   ,R.QST_CDNM QST_NM
+				   ,CTRA_INSA_CLCD
+				   ,S.SCRIPT_SENT_ID SENT_ID
+				   ,SCRIPT_SENT = CAST(SCRIPT_SENT AS nvarchar(max))
+				   ,ISNULL(SENT_SCORE,0) SCORE
+				   ,R.SORTKEY
+				   ,R.QST_RATE
+			FROM (SELECT
+								*
+						FROM
+							(SELECT
+									CON_ENT_DGN_NO,
+									SC_SNO,
+									SC_LCLF_CD,
+									SC_SCLF_CD,
+									QST_CD,
+									CNTR_CD,
+									CTRA_INSA_CLCD,
+									SCRIPT_SENT_ID,
+									SENT_SCORE
+									FROM ms_regu_score r 	--문장 준수한 테이블
+									WHERE CON_ENT_DGN_NO=?CED_NO
+									AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+							) A
+					UNION
+						SELECT
+								*
+						FROM
+							(SELECT
+								    CON_ENT_DGN_NO,
+									SC_SNO,
+									SC_LCLF_CD,
+									SC_SCLF_CD,
+									QST_CD,
+									CNTR_CD,
+									CTRA_INSA_CLCD,
+									SCRIPT_SENT_ID,
+									SENT_SCORE
+								FROM MS_REGU_OMIT R			   		   --누락한 문장들 테이블
+								WHERE CON_ENT_DGN_NO=?CED_NO
+								AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+							) B ) S, ms_script_sent R
+			 WHERE S.SC_SNO=R.SC_SNO
+					AND S.SC_LCLF_CD=R.SC_LCLF_CD
+					AND S.SC_SCLF_CD=R.SC_SCLF_CD
+					AND S.QST_CD=R.QST_CD
+					-- AND S.CNTR_CD=R.CNTR_CD
+					AND (R.CNTR_CD='00000' or (S.SNTR_CD= R.CNTR_CD and R.SC_LCLF_CD in (SELECT SC_CD from tb_sc_code_mng where type_cd = 'L' and comm_yn <> 'Y' ) )  )
+
+					AND S.SCRIPT_SENT_ID = R.SCRIPT_SENT_ID
+					AND S.CTRA_INSA_CLCD=?CTRA_INSA_CLCD
+					?sclf_cd
+			GROUP BY S.SC_LCLF_CD,S.SC_SCLF_CD,S.QST_CD,R.QST_CDNM,CTRA_INSA_CLCD, S.SCRIPT_SENT_ID,CAST(SCRIPT_SENT AS nvarchar(max)),SENT_SCORE,SORTKEY,QST_RATE
+		) A
+		-- WHERE SCORE > 0
+		GROUP BY SC_LCLF_CD,SC_SCLF_CD,QST_CD, QST_NM, CTRA_INSA_CLCD,  SENT_ID, CAST(SCRIPT_SENT AS nvarchar(max))	,SORTKEY,QST_RATE
+		ORDER BY CTRA_INSA_CLCD,SC_LCLF_CD,SC_SCLF_CD,SORTKEY,SENT_ID
+
+		]]></query>
+		<parameter name='sclf_cd' value="AND S.SC_SCLF_CD= ?SCLF_CD" default="" />
+	</sql-service>
+
+	<!--<sql-service name='oba.oba010t3.getVrsDetailRes2.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS문장 조회(상세조회) - 팝업용 - 녹취키랑 준수문장 가져옴</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+			SELECT A.QST_CD,
+				   A.UCID,
+				   A.START_TIME,
+				   A.SCRIPT_SENT_ID AS SENT_ID,
+				   B.STT_SENT,
+				   (SELECT FILE_FULL_PATH FROM ms_stt_meta WHERE UCID = A.UCID AND CON_ENT_DGN_NO = ?CED_NO) AS FILE_FULL_PATH,
+				   (SELECT ENC_FLAG FROM ms_stt_meta WHERE UCID = A.UCID AND CON_ENT_DGN_NO = ?CED_NO) AS ENC_FLAG
+			FROM ms_regu_score A, ms_stt_rslt B
+			WHERE A.UCID = B.UCID
+			AND A.STT_SENT_ID = B.STT_SENT_ID
+			AND A.SENT_SCORE >  0
+			?sclf_cd
+			AND A.CON_ENT_DGN_NO = ?CED_NO
+			ORDER BY UCID,QST_CD,SCRIPT_SENT_ID
+		]]></query>
+		<parameter name='sclf_cd' value="AND SC_SCLF_CD= ?SCLF_CD" default="" />
+	</sql-service> -->
+	
+	<sql-service name='oba.oba010t3.getVrsDetailRes2.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS문장 조회(상세조회) - 팝업용 - 녹취키랑 준수문장 가져옴</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+		SELECT 
+			AA.QST_CD,
+			AA.SC_SCLF_CD,
+			AA.CTRA_INSA_CLCD,
+			AA.UCID,
+			AA.SENT_ID,
+			AA.FILE_FULL_PATH,
+			AA.ENC_FLAG,
+			AA.SCORE,
+			B.START_TIME,
+			B.STT_SENT
+	FROM 
+		(SELECT
+			SC_LCLF_CD,
+			SC_SCLF_CD,
+			QST_CD,
+			CTRA_INSA_CLCD,
+			UCID,
+			SCRIPT_SENT_ID SENT_ID,
+			FILE_FULL_PATH,
+			ENC_FLAG,
+			SORTKEY,
+			MAX(SENT_SCORE) SCORE
+		FROM
+			(
+				SELECT 
+					  A.SC_LCLF_CD,
+					  A.SC_SCLF_CD,
+					   A.QST_CD,
+					   A.CTRA_INSA_CLCD,
+					   A.UCID,
+					   A.SCRIPT_SENT_ID,
+					   SENT_SCORE,
+					   SORTKEY,
+				   (SELECT FILE_FULL_PATH FROM ms_stt_meta WHERE UCID = A.UCID AND CON_ENT_DGN_NO = ?CED_NO) AS FILE_FULL_PATH,
+				   (SELECT ENC_FLAG FROM ms_stt_rslt_merge WHERE UCID = A.UCID) AS ENC_FLAG
+				FROM ms_regu_score A, ms_stt_rslt B,ms_script_mng R
+				WHERE A.UCID = B.UCID
+				AND A.STT_SENT_ID = B.STT_SENT_ID
+				AND A.SENT_SCORE >  0
+				AND A.SC_SNO=R.SC_SNO
+				AND A.SC_LCLF_CD=R.SC_LCLF_CD
+				AND A.SC_SCLF_CD=R.SC_SCLF_CD
+				AND A.QST_CD=R.QST_CD
+
+				-- AND A.CNTR_CD=R.CNTR_CD
+				AND (R.CNTR_CD='00000' or (A.SNTR_CD= R.CNTR_CD and R.SC_LCLF_CD in (SELECT SC_CD from tb_sc_code_mng where type_cd = 'L' and comm_yn <> 'Y' ) )  )
+
+				?sclf_cd
+				AND A.CON_ENT_DGN_NO =?CED_NO
+				AND (SELECT distinct GRD_FLAG FROM MS_STT_META M WHERE M.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+			) A
+		GROUP BY SC_LCLF_CD,SC_SCLF_CD,QST_CD,CTRA_INSA_CLCD, UCID, SCRIPT_SENT_ID, FILE_FULL_PATH, ENC_FLAG,SORTKEY) AA, 
+		(SELECT 
+					A.SC_LCLF_CD,
+					A.SC_SCLF_CD,
+					A.QST_CD,
+					A.CTRA_INSA_CLCD,
+					   A.UCID,
+					   A.SCRIPT_SENT_ID,
+					   B.STT_SENT,
+					   SENT_SCORE,
+					   SORTKEY,
+					   B.START_TIME
+		FROM ms_regu_score A, ms_stt_rslt B,ms_script_mng R
+			WHERE A.UCID = B.UCID
+			AND A.STT_SENT_ID = B.STT_SENT_ID
+			AND A.SENT_SCORE >  0
+			AND A.SC_SNO=R.SC_SNO
+			AND A.SC_LCLF_CD=R.SC_LCLF_CD
+			AND A.SC_SCLF_CD=R.SC_SCLF_CD
+			AND A.QST_CD=R.QST_CD
+			-- AND A.CNTR_CD=R.CNTR_CD
+			AND (R.CNTR_CD='00000' or (A.SNTR_CD= R.CNTR_CD and R.SC_LCLF_CD in (SELECT SC_CD from tb_sc_code_mng where type_cd = 'L' and comm_yn <> 'Y' ) )  )
+
+			?sclf_cd
+			AND A.CON_ENT_DGN_NO = ?CED_NO
+			AND (SELECT distinct GRD_FLAG FROM MS_STT_META M WHERE M.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+		) B
+		WHERE AA.QST_CD = B.QST_CD
+		AND AA.UCID=B.UCID
+		AND AA.SENT_ID = B.SCRIPT_SENT_ID
+		AND AA.SCORE=B.SENT_SCORE
+		AND AA.CTRA_INSA_CLCD = B.CTRA_INSA_CLCD
+		AND AA.CTRA_INSA_CLCD = ?CTRA_INSA_CLCD
+		ORDER BY UCID, AA.SC_LCLF_CD,AA.SC_SCLF_CD,AA.SORTKEY,SCRIPT_SENT_ID
+		]]></query>
+		<parameter name='sclf_cd' value="AND A.SC_SCLF_CD= ?SCLF_CD" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba010t4.getBanDetailRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>금칙어 결과 조회(상세조회) - 팝업용 - 녹취키랑 준수문장 가져옴</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+			SELECT
+						  A.UCID
+						 ,MENT_CD BAN_CD
+						 ,B.START_TIME
+						 ,CAST(STT_SENT as NVARCHAR(max)) STT_SENT
+						 ,(SELECT FILE_FULL_PATH FROM ms_stt_meta z WHERE z.UCID = A.UCID AND CON_ENT_DGN_NO = ?CED_NO) AS FILE_FULL_PATH
+						 ,(SELECT ENC_FLAG FROM ms_stt_rslt_merge z WHERE z.UCID = A.UCID) AS ENC_FLAG
+					FROM ms_search_score a,ms_stt_rslt b
+					WHERE A.UCID=B.UCID
+						 AND A.START_TIME=B.START_TIME
+						 AND TYPE='1'
+						 AND A.UCID in (SELECT UCID FROM ms_stt_meta WHERE CON_ENT_DGN_NO = ?CED_NO )
+						 AND (SELECT distinct GRD_FLAG FROM MS_STT_META M WHERE M.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+						 ?ban_cd
+
+		]]></query>
+		<parameter name='ban_cd' value="AND MENT_CD = ?BAN_CD " default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010t5.getDmboRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>해당 설계의 담보 가져옴 및 준수개수 가져옴</description>
+		<result-name>DS_MENT_RES</result-name>
+		<query><![CDATA[
+			SELECT AA.*
+						,CONCAT(SCORE_CNT,'/',MNG_CNT) MENT_CNT
+						,CASE WHEN (SELECT  TOP(1) SRC_FLAG FROM MS_STT_META Z WITH(NOLOCK) WHERE CON_ENT_DGN_NO = CED_NO ORDER BY SRC_FLAG ) <> 'Y' THEN '분석진행중' ELSE '분석완료' END SRC_FLAG
+			FROM (
+					SELECT 
+						 CON_ENT_DGN_NO CED_NO
+						,A.PROD_CD
+						,MAX(DMBO_NM) DMBO_NM
+						 ,Items DMBO_CD
+						 ,COUNT(1) MNG_CNT
+						 ,(SELECT COUNT(DISTINCT MENT_CD) FROM ms_ment_score B WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO and A.PROD_CD=B.PROD_CD and A.Items=B.DMBO_CD) SCORE_CNT
+						FROM
+						(SELECT 
+								DISTINCT
+								A.CON_ENT_DGN_NO,
+								A.PROD_CD,
+								A.SRC_FLAG,
+								(SELECT DMBO_NM FROM MS_DMBO D WHERE D.PROD_CD = A.PROD_CD AND D.DMBO_CD = Items) DMBO_NM ,
+								Items 
+						FROM vw_usermaster B,ms_stt_meta A  outer apply  dbo.fn_split_string(DMBO_CD, ',')
+						WHERE A.USER_ID=B.USER_ID
+								
+							AND A.PROD_CD =?PROD_CD
+							AND A.CON_ENT_DGN_NO=?CED_NO
+								
+						) A, ms_ment_mng B
+						 WHERE A.PROD_CD = B.PROD_CD AND A.Items = B.DMBO_CD
+						 GROUP BY CON_ENT_DGN_NO,A.PROD_CD,Items
+						  ) AA
+						  ORDER BY DMBO_CD
+
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010t5.getMentDetailRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>담보의 필수멘트와 STT 문장 가져옴</description>
+		<result-name>DS_RES</result-name>
+		<query><![CDATA[
+			SELECT
+					CON_ENT_DGN_NO CED_NO
+					,A.DMBO_CD
+					,ISNULL((SELECT DISTINCT ENC_FLAG FROM ms_stt_rslt_merge Z WHERE B.UCID=Z.UCID),'Z') AS ENC_FLAG --Z면 STT가 없는거
+					,(SELECT DISTINCT DMBO_NM FROM ms_dmbo D WHERE A.PROD_CD = D.PROD_CD AND A.DMBO_CD=D.DMBO_CD) AS DMBO_NM
+					,A.MENT_CD
+					,CONCAT(A.MENT_SENT,' {',A.MENT_KEYWORD,'}') MNG_MENT
+					,START_TIME
+					,B.UCID 
+					,(SELECT DISTINCT FILE_FULL_PATH FROM MS_STT_META WITH(NOLOCK) WHERE UCID = B.UCID AND CON_ENT_DGN_NO=?CED_NO) FILE_FULL_PATH
+					,STT_SENT
+					,CASE WHEN CON_ENT_DGN_NO IS NULL THEN 'N' ELSE 'Y' END MENT_YN
+			FROM MS_MENT_MNG A 
+			LEFT OUTER JOIN
+				(SELECT A.UCID
+						,CON_ENT_DGN_NO
+						,A.START_TIME
+						,A.STT_SENT_ID
+						,STT_SENT
+						,(SELECT DISTINCT UCID_DATE FROM MS_STT_META A WHERE B.UCID=A.UCID) UCID_DATE
+						,PROD_CD
+						,DMBO_CD
+						,MENT_CD
+				FROM ms_ment_score A, ms_stt_rslt B
+				WHERE A.UCID=B.UCID
+				AND A.START_TIME=B.START_TIME
+				AND A.PROD_CD=?PROD_CD
+				AND A.DMBO_CD=?DMBO_CD
+				AND CON_ENT_DGN_NO=?CED_NO
+			) B ON A.PROD_CD = B.PROD_CD AND A.DMBO_CD = B.DMBO_CD AND A.MENT_CD = B.MENT_CD
+			WHERE 1=1
+			AND A.PROD_CD=?PROD_CD
+			AND A.DMBO_CD=?DMBO_CD
+			ORDER BY A.MENT_CD, UCID_DATE, STT_SENT_ID
+		]]></query>
+	</sql-service>
+	
+	
+	<sql-service name='oba.oba050.getVrsRank.sclf.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>VRS랭킹</description>
+		<result-name>DS_SCLF_RANK</result-name>
+		<query><![CDATA[
+			SELECT
+				TOP(50)
+					--SC_SNO
+					LCLF_CD
+					,LCLF_NM
+					,SCLF_CD
+					,SCLF_NM
+					,SCORE
+					,ROW_NUMBER() OVER(ORDER BY SCORE DESC) RANK
+			FROM (
+				SELECT
+				--	MAX(SC_SNO)	SC_SNO
+					SC_LCLF_CD LCLF_CD
+					,(SELECT SC_CDNM FROM tb_sc_code_mng B WHERE A.SC_LCLF_CD = B.SC_CD and TYPE_CD='L') LCLF_NM
+					,SC_SCLF_CD SCLF_CD
+					,(SELECT SC_CDNM FROM tb_sc_code_mng B WHERE A.SC_SCLF_CD = B.SC_CD and TYPE_CD='S') SCLF_NM
+					,ROUND(AVG(ISNULL(SENT_SCORE,0)),2) SCORE
+				FROM ms_regu_score A ,
+				(select 
+						 	 con_ent_dgn_no, 
+							 con_ent_dgn_date
+				FROM ms_stt_meta Z,  (SELECT ORG1_CD, ORG1_NAME, ORG2_CD, ORG2_NAME,ORG3_CD, ORG3_NAME, USER_ID, USER_NAME FROM vw_usermaster WHERE 1=1  ?new_user_id) Y			 
+				WHERE  Z.USER_ID=Y.USER_ID 
+							  AND Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+							 ?istp_cd
+							 ?prod_cd
+							 ?user_id
+							 ?anl_stat
+							 ?org1_cd
+							 ?org2_flag
+							 ?org3_cd
+						GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+				) B
+				WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				GROUP BY SC_LCLF_CD,SC_SCLF_CD
+				) Z
+				 WHERE 1=1
+			ORDER BY SCORE DESC
+
+		]]></query>
+			<parameter name='org1_cd' value="AND Y.ORG1_CD = '?ORG1_CD'" default="" />
+			<parameter name='org2_flag' value="" default="" >
+				<condition key="M" value="AND Y.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+				<condition key="O" value="AND Y.ORG2_CD = '?ORG2_CD'"/>
+				<condition key="A" value=""/>
+			</parameter> 
+			<parameter name='org3_cd' value="AND Y.ORG3_CD = '?ORG3_CD'" default="" />
+			<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+			<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+			<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" />
+			<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+			<parameter name='new_user_id' value="AND WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba050.getVrsRank.qst.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>VRS랭킹</description>
+		<result-name>DS_QST_RANK</result-name>
+		<query><![CDATA[
+			SELECT
+				TOP(50)
+					QST_CDNM
+					,ROUND(AVG(ISNULL(SCORE,0)),2) SCORE
+					,ROW_NUMBER() OVER(ORDER BY ROUND(AVG(ISNULL(SCORE,0)),2) DESC) RANK
+			FROM (
+					SELECT
+					A.QST_CD
+				, (SELECT QST_CDNM FROM ms_script_mng C WHERE  A.SC_SNO=C.SC_SNO and A.SC_LCLF_CD=C.SC_LCLF_CD and A.SC_SCLF_CD=C.SC_SCLF_CD and A.CNTR_CD=C.CNTR_CD and A.QST_CD=C.QST_CD) QST_CDNM
+				,ISNULL(SENT_SCORE,0) SCORE
+				FROM ms_regu_score A,
+				(select 
+						 	 con_ent_dgn_no, 
+							 con_ent_dgn_date
+				FROM ms_stt_meta Z,  (SELECT ORG1_CD, ORG1_NAME, ORG2_CD, ORG2_NAME,ORG3_CD, ORG3_NAME, USER_ID, USER_NAME FROM vw_usermaster WHERE 1=1 ?new_user_id) Y			 
+				WHERE  Z.USER_ID=Y.USER_ID 
+							  AND Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+							 ?istp_cd
+							 ?prod_cd
+							 ?user_id
+							 ?anl_stat
+							 ?org1_cd
+							 ?org2_flag
+							 ?org3_cd
+						GROUP BY CON_ENT_DGN_NO,CON_ENT_DGN_DATE
+				) B
+				WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				and A.SC_LCLF_CD = '?LCLF_CD'
+				and A.SC_SCLF_CD = '?SCLF_CD'
+				GROUP BY A.QST_CD,A.SC_SNO,A.SC_LCLF_CD,A.SC_SCLF_CD,A.CNTR_CD,A.QST_CD,SENT_SCORE
+				) Z
+				 WHERE 1=1
+			GROUP BY QST_CDNM
+			ORDER BY ROUND(AVG(ISNULL(SCORE,0)),2) DESC
+		]]></query>
+			<parameter name='org1_cd' value="AND Y.ORG1_CD = '?ORG1_CD'" default="" />
+			<parameter name='org2_flag' value="" default="" >
+				<condition key="M" value="AND Y.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+				<condition key="O" value="AND Y.ORG2_CD = '?ORG2_CD'"/>
+				<condition key="A" value=""/>
+			</parameter> 
+			<parameter name='org3_cd' value="AND Y.ORG3_CD = '?ORG3_CD'" default="" />
+			<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+			<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+			<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" />
+			<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+			<parameter name='new_user_id' value="AND WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+
+	<sql-service name='oba.oba050.getVrsRank.detail.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>VRS랭킹-디테일</description>
+		<result-name>DS_ORG_RANK</result-name>
+		<query><![CDATA[
+		SELECT
+			TOP(30)
+			RANK() OVER(ORDER BY ROUND(AVG(SENT_SCORE),2) DESC) RANK,
+					ORG1_CD,
+					ORG2_CD,
+					ORG2_NAME ORG2_NM, 
+					ORG3_CD,
+					ORG3_NAME ORG3_NM,
+					C.USER_ID,
+					USER_NAME+'('+C.USER_ID+')' USER_NAME,
+					ROUND(AVG(ISNULL(SENT_SCORE,0)),2) AVG_SCORE
+			FROM
+			(SELECT 
+				A.SC_SNO,
+				A.SC_LCLF_CD,
+				A.QST_CD,
+				A.CNTR_CD,
+				A.CON_ENT_DGN_NO,
+				A.SENT_SCORE
+				FROM ms_regu_score A
+				WHERE 1=1 
+				?lclf_cd
+				?sclf_cd
+				AND A.QST_CD IN (SELECT A.QST_CD FROM MS_SCRIPT_MNG A
+								WHERE 1=1
+								?lclf_cd
+								?sclf_cd
+								?qst_cdnm)
+				) A, 
+			(SELECT 
+					CON_ENT_DGN_NO,
+					MAX(USER_ID) USER_ID 
+				FROM ms_stt_meta M 
+				WHERE M.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				?istp_cd
+				?prod_cd
+				?anl_stat
+				GROUP BY CON_ENT_DGN_NO) B, vw_usermaster C
+				WHERE A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
+				AND B.USER_ID = C.USER_ID
+				?org1_cd
+				?org2_flag
+				?org3_cd
+				?user_id
+				?new_user_id
+			GROUP BY ORG1_CD,ORG2_CD,ORG2_NAME,ORG3_CD,ORG3_NAME,C.USER_ID,USER_NAME
+			ORDER BY RANK() OVER(ORDER BY ROUND(AVG(SENT_SCORE),2) DESC)
+
+		]]></query>
+		<parameter name='lclf_cd'  value="AND A.SC_LCLF_CD = '?LCLF_CD'" default=""/>
+		<parameter name='sclf_cd'  value="AND A.SC_SCLF_CD = '?SCLF_CD'" default=""/>
+		<parameter name='qst_cdnm'  value="AND A.QST_CDNM = '?QST_CDNM'" default=""/>
+		<parameter name='org1_cd' value="AND C.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+				<condition key="M" value="AND C.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+				<condition key="O" value="AND C.ORG2_CD = '?ORG2_CD'"/>
+				<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND C.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_STAT'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND C.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+
+<!-- 평균값이상하면 이거사용 따로따로.
+	<sql-service name='oba.oba050.getVrsRank.detail1.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS랭킹-디테일(센터별)</description>
+		<result-name>DS_ORG_RANK</result-name>
+		<query><![CDATA[
+			SELECT
+				TREATYHQCD ORG1_CD
+				,TREATYHQNM ORG1_NM
+				,TREATYBRHCD ORG2_CD
+				,TREATYBRHNM ORG2_NM
+				,SCORE
+				,ROW_NUMBER() OVER(ORDER BY SCORE ASC) RANK
+			FROM (
+					SELECT
+						TREATYHQCD
+						,TREATYHQNM
+						,TREATYBRHCD
+						,TREATYBRHNM
+						,ROUND(AVG(SCORE),2) SCORE
+					FROM MS_REGU_SUM A
+					WHERE 1=1
+					?qst_cd
+					GROUP BY TREATYHQCD,TREATYHQNM,TREATYBRHCD,TREATYBRHNM
+				) Z
+			ORDER BY SCORE
+		]]></query>
+		<parameter name='qst_cd'  value="AND QST_CD = ?qst_cd" default=""/>
+	</sql-service>
+
+	<sql-service name='oba.oba050.getVrsRank.detail2.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS랭킹-디테일(팀별)</description>
+		<result-name>DS_ORG_RANK</result-name>
+		<query><![CDATA[
+			SELECT
+				TREATYHQCD ORG1_CD
+				,TREATYHQNM ORG1_NM
+				,TREATYBRHCD ORG2_CD
+				,TREATYBRHNM ORG2_NM
+				,TREATYDEPTCD ORG3_CD
+				,TREATYDEPTNM ORG3_NM
+				,SCORE
+				,ROW_NUMBER() OVER(ORDER BY SCORE ASC) RANK
+			FROM (
+					SELECT
+						TREATYHQCD
+						,TREATYHQNM
+						,TREATYBRHCD
+						,TREATYBRHNM
+						,TREATYDEPTCD
+						,TREATYDEPTNM
+						,ROUND(AVG(SCORE),2) SCORE
+					FROM MS_REGU_SUM A
+					WHERE 1=1
+					?qst_cd
+					GROUP BY TREATYHQCD,TREATYHQNM,TREATYBRHCD,TREATYBRHNM,TREATYDEPTCD,TREATYDEPTNM
+				) Z
+			ORDER BY SCORE
+		]]></query>
+		<parameter name='qst_cd'  value="AND QST_CD = ?qst_cd" default=""/>
+	</sql-service>
+
+	<sql-service name='oba.oba050.getVrsRank.detail3.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>VRS랭킹-디테일(상담사별)</description>
+		<result-name>DS_ORG_RANK</result-name>
+		<query><![CDATA[
+			SELECT
+				TREATYHQCD ORG1_CD
+				,TREATYHQNM ORG1_NM
+				,TREATYBRHCD ORG2_CD
+				,TREATYBRHNM ORG2_NM
+				,TREATYDEPTCD ORG3_CD
+				,TREATYDEPTNM ORG3_NM
+				,USER_ID
+				,USER_NAME
+				,SCORE
+				,ROW_NUMBER() OVER(ORDER BY SCORE ASC) RANK
+			FROM (
+					SELECT
+						TREATYHQCD
+						,TREATYHQNM
+						,TREATYBRHCD
+						,TREATYBRHNM
+						,TREATYDEPTCD
+						,TREATYDEPTNM
+						,USER_ID
+						,(SELECT USER_NAME FROM ms_usermaster B WHERE A.USER_ID = B.USER_ID) USER_NAME
+						,ROUND(AVG(SCORE),2) SCORE
+					FROM MS_REGU_SUM A
+					WHERE 1=1
+					?qst_cd
+					GROUP BY TREATYHQCD,TREATYHQNM,TREATYBRHCD,TREATYBRHNM,TREATYDEPTCD,TREATYDEPTNM,USER_ID
+				) Z
+			ORDER BY SCORE
+		]]></query>
+		<parameter name='qst_cd'  value="AND QST_CD = ?qst_cd" default=""/>
+	</sql-service>
+	 -->
+	<sql-service name="oba.oba030.getWeight.sel" datasource="is_stat" paging="false" type="prepared">
+			<description>Grade별 가중치 조회</description>
+			<result-name>DS_RES_WEIGHT</result-name>
+			<query><![CDATA[
+				SELECT 
+					CODE_NAME CODE_NM
+					,WEIGHT 
+				FROM ms_grade_weight A, ms_codebook B
+				WHERE B.CODE_TYPE='VSS170'
+				AND A.ITEM_CD=B.CODE_ID
+				AND B.CODE_ID <> '00'
+				AND USE_YN = 'Y'
+				?VERSION
+				ORDER BY ETC5
+			]]></query>
+			<parameter name='VERSION' value="AND VERSION        = ?VERSION" default="AND VERSION = (select MAX(CONVERT(INT,VERSION)) from ms_grade_version)" />
+	</sql-service>	
+	
+	
+	<sql-service name='oba.oba030.gradeResult.cedno.cnt.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>가입설계번호별 청약리스트</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+				SELECT count(*) totalcount FROM
+				        (SELECT
+						A.CON_ENT_DGN_DATE CED_DATE
+						,A.CON_ENT_DGN_NO CED_NO
+						,MAX(C.TREATYBRHCD) ORG2_CD
+						,MAX(C.TREATYBRHNM) ORG2_NM
+						,MAX(C.TREATYDEPTCD) ORG3_CD
+						,MAX(C.TREATYDEPTNM) ORG3_NM
+						,MAX(A.CUST_NM) CUST_NM
+						,MAX(A.USER_ID) USER_ID
+						,(SELECT STUFF((
+									SELECT ',' + code_name
+									FROM ms_codebook Z
+								 where Z.CODE_ID in  (SELECT Items FROM dbo.fn_split_string(MAX(A.CLC), ','))
+								  AND CODE_TYPE ='SYS105'  AND CODE_ID <> '00'
+									FOR XML PATH('')
+							   ),1,1,'')) AS CIC 
+						,(select USER_NAME+'('+Z.USER_ID+')' from ms_usermaster z where z.USER_ID = MAX(A.USER_ID)) USER_NM
+						,(select USER_NAME+'('+Z.USER_ID+')' from ms_usermaster z where z.USER_ID = MAX(A.ASS_USER_ID)) QC_NM
+						,MAX(CALL_CNT) CALL_CNT
+						,(MAX(A.DURATION)) DURATION --10 밀리세컨드
+						,MAX(ISTP_NM) ISTP_NM
+						,MAX(PROD_NM) PROD_NM
+						,CASE WHEN MAX(GRD_FLAG)='Y' THEN '완료' ELSE '진행중' END ANL_STAT
+						,(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(MAX(CHG_GRADE),MAX(GRADE))) GRADE
+						,CONVERT(INT,MAX(GRADE_SUM)) GRADE_SCORE
+						,CONVERT(INT,MAX(VRS_SCORE)) VRS_SCORE
+						,CONVERT(INT,MAX(BAN_SCORE)) BAN_SCORE
+						,CONVERT(INT,MAX(BEF_SCORE)) BEF_SCORE
+						,CONVERT(INT,MAX(SEC_SCORE)) SEC_SCORE
+						,CONVERT(INT,MAX(FOC_SCORE)) FOC_SCORE
+						,CONVERT(INT,MAX(MEN_SCORE)) MEN_SCORE
+				FROM
+				(
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(CON_ENT_DGN_DATE) CON_ENT_DGN_DATE,
+						MAX(USER_ID) USER_ID,
+						MAX(CTRA_INSA_CLCD) CLC,
+						MAX(ISTP_CD) ISTP_CD,
+						MAX(ISTP_NM) ISTP_NM,
+						MAX(PROD_CD) PROD_CD,
+						MAX(CON_P_CONT_NAME) CUST_NM,
+						MAX(PROD_NM) PROD_NM,
+						MAX(GRD_FLAG) GRD_FLAG,
+						MAX(ASS_USER_ID) ASS_USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?user_id
+				 ?cust_nm
+				 ?new_user_id
+				 ?ced_no
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+			  GROUP BY CON_ENT_DGN_DATE,A.CON_ENT_DGN_NO
+			 ) AS A
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	 <sql-service name='oba.oba030.gradeResult.cedno.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>가입설계번호별 청약리스트</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				      SELECT
+						A.CON_ENT_DGN_DATE CED_DATE
+						,A.CON_ENT_DGN_NO CED_NO
+						,MAX(C.TREATYBRHCD) ORG2_CD
+						,MAX(C.TREATYBRHNM) ORG2_NM
+						,MAX(C.TREATYDEPTCD) ORG3_CD
+						,MAX(C.TREATYDEPTNM) ORG3_NM
+						,MAX(A.CUST_NM) CUST_NM
+						,MAX(A.USER_ID) USER_ID
+						,(SELECT STUFF((
+									SELECT ',' + code_name
+									FROM ms_codebook Z
+								 where Z.CODE_ID in  (SELECT Items FROM dbo.fn_split_string(MAX(A.CLC), ','))
+								  AND CODE_TYPE ='SYS105'  AND CODE_ID <> '00'
+									FOR XML PATH('')
+							   ),1,1,'')) AS CIC 
+						,(select USER_NAME+'('+Z.USER_ID+')' from ms_usermaster z where z.USER_ID = MAX(A.USER_ID)) USER_NM
+						,(select USER_NAME+'('+Z.USER_ID+')' from ms_usermaster z where z.USER_ID = MAX(A.ASS_USER_ID)) QC_NM
+						,MAX(CALL_CNT) CALL_CNT
+						,(MAX(A.DURATION)) DURATION --10 밀리세컨드
+						,MAX(ISTP_NM) ISTP_NM
+						,MAX(PROD_NM) PROD_NM
+						,CASE WHEN MAX(GRD_FLAG)='Y' THEN '완료' ELSE '진행중' END ANL_STAT
+						,(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(MAX(CHG_GRADE),MAX(GRADE))) GRADE
+						,CONVERT(INT,MAX(GRADE_SUM)) GRADE_SCORE
+						,CONVERT(INT,MAX(VRS_SCORE)) VRS_SCORE
+						,CONVERT(INT,MAX(BAN_SCORE)) BAN_SCORE
+						,CONVERT(INT,MAX(BEF_SCORE)) BEF_SCORE
+						,CONVERT(INT,MAX(SEC_SCORE)) SEC_SCORE
+						,CONVERT(INT,MAX(FOC_SCORE)) FOC_SCORE
+						,CONVERT(INT,MAX(MEN_SCORE)) MEN_SCORE
+				FROM
+				(
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(CON_ENT_DGN_DATE) CON_ENT_DGN_DATE,
+						MAX(USER_ID) USER_ID,
+						MAX(CTRA_INSA_CLCD) CLC,
+						MAX(ISTP_CD) ISTP_CD,
+						MAX(ISTP_NM) ISTP_NM,
+						MAX(PROD_CD) PROD_CD,
+						MAX(CON_P_CONT_NAME) CUST_NM,
+						MAX(PROD_NM) PROD_NM,
+						MAX(GRD_FLAG) GRD_FLAG,
+						MAX(ASS_USER_ID) ASS_USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?user_id
+				 ?cust_nm
+				 ?new_user_id
+				 ?ced_no
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+			  GROUP BY CON_ENT_DGN_DATE,A.CON_ENT_DGN_NO
+			  ORDER BY MAX(GRD_FLAG) DESC, CON_ENT_DGN_DATE DESC,A.CON_ENT_DGN_NO,MAX(C.TREATYBRHCD),MAX(C.TREATYDEPTCD),MAX(A.USER_ID)
+			  OFFSET  CONVERT(INT,?_START) ROWS
+			  FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	 <sql-service name='oba.oba030.gradeResult.cedno.all.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>가입설계번호별 청약리스트</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				      SELECT
+						A.CON_ENT_DGN_DATE CED_DATE
+						,A.CON_ENT_DGN_NO CED_NO
+						,MAX(C.TREATYBRHCD) ORG2_CD
+						,MAX(C.TREATYBRHNM) ORG2_NM
+						,MAX(C.TREATYDEPTCD) ORG3_CD
+						,MAX(C.TREATYDEPTNM) ORG3_NM
+						,MAX(A.CUST_NM) CUST_NM
+						,MAX(A.USER_ID) USER_ID
+						,(SELECT STUFF((
+									SELECT ',' + code_name
+									FROM ms_codebook Z
+								 where Z.CODE_ID in  (SELECT Items FROM dbo.fn_split_string(MAX(A.CLC), ','))
+								  AND CODE_TYPE ='SYS105'  AND CODE_ID <> '00'
+									FOR XML PATH('')
+							   ),1,1,'')) AS CIC 
+						,(select USER_NAME+'('+Z.USER_ID+')' from ms_usermaster z where z.USER_ID = MAX(A.USER_ID)) USER_NM
+						,(select USER_NAME+'('+Z.USER_ID+')' from ms_usermaster z where z.USER_ID = MAX(A.ASS_USER_ID)) QC_NM
+						,MAX(CALL_CNT) CALL_CNT
+						,(MAX(A.DURATION)) DURATION --10 밀리세컨드
+						,MAX(ISTP_NM) ISTP_NM
+						,MAX(PROD_NM) PROD_NM
+						,CASE WHEN MAX(GRD_FLAG)='Y' THEN '완료' ELSE '진행중' END ANL_STAT
+						,(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(MAX(CHG_GRADE),MAX(GRADE))) GRADE
+						,CONVERT(INT,MAX(GRADE_SUM)) GRADE_SCORE
+						,CONVERT(INT,MAX(VRS_SCORE)) VRS_SCORE
+						,CONVERT(INT,MAX(BAN_SCORE)) BAN_SCORE
+						,CONVERT(INT,MAX(BEF_SCORE)) BEF_SCORE
+						,CONVERT(INT,MAX(SEC_SCORE)) SEC_SCORE
+						,CONVERT(INT,MAX(FOC_SCORE)) FOC_SCORE
+						,CONVERT(INT,MAX(MEN_SCORE)) MEN_SCORE
+				FROM
+				(
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(CON_ENT_DGN_DATE) CON_ENT_DGN_DATE,
+						MAX(USER_ID) USER_ID,
+						MAX(CTRA_INSA_CLCD) CLC,
+						MAX(ISTP_CD) ISTP_CD,
+						MAX(ISTP_NM) ISTP_NM,
+						MAX(PROD_CD) PROD_CD,
+						MAX(CON_P_CONT_NAME) CUST_NM,
+						MAX(PROD_NM) PROD_NM,
+						MAX(GRD_FLAG) GRD_FLAG,
+						MAX(ASS_USER_ID) ASS_USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?user_id
+				 ?cust_nm
+				 ?new_user_id
+				 ?ced_no
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+			  GROUP BY CON_ENT_DGN_DATE,A.CON_ENT_DGN_NO
+			  ORDER BY MAX(GRD_FLAG) DESC,CON_ENT_DGN_DATE DESC,A.CON_ENT_DGN_NO,MAX(C.TREATYBRHCD),MAX(C.TREATYDEPTCD),MAX(A.USER_ID)
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	 <sql-service name='oba.oba030.gradeResult.org2.cnt.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>센터별 청약리스트</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+		SELECT count(*) totalcount FROM(
+				SELECT
+					C.TREATYBRHCD ORG2_CD
+					,C.TREATYBRHNM ORG2_NM
+					,COUNT(A.CON_ENT_DGN_NO) CED_CNT
+					,SUM(CALL_CNT) CALL_CNT
+					,SUM(DURATION) DURATION --10 밀리세컨드
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '1' THEN 1 ELSE 0 END) AS GRADE1_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '2' THEN 1 ELSE 0 END) AS GRADE2_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '3' THEN 1 ELSE 0 END) AS GRADE3_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '4' THEN 1 ELSE 0 END) AS GRADE4_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '5' THEN 1 ELSE 0 END) AS GRADE5_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '6' THEN 1 ELSE 0 END) AS GRADE6_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '7' THEN 1 ELSE 0 END) AS GRADE7_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '8' THEN 1 ELSE 0 END) AS GRADE8_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '9' THEN 1 ELSE 0 END) AS GRADE9_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '10' THEN 1 ELSE 0 END) AS GRADE10_CNT
+					,CONVERT(INT,ROUND(AVG(GRADE_SUM),0,0)) AVG_GRADE_SCORE
+					,CONVERT(INT,ROUND(AVG(VRS_SCORE),0,0)) AVG_VRS_SCORE
+					,CONVERT(INT,ROUND(AVG(BAN_SCORE),0,0)) AVG_BAN_SCORE
+					,CONVERT(INT,ROUND(AVG(SEC_SCORE),0,0)) AVG_SEC_SCORE
+					,CONVERT(INT,ROUND(AVG(FOC_SCORE),0,0)) AVG_FOC_SCORE
+					,CONVERT(INT,ROUND(AVG(BEF_SCORE),0,0)) AVG_BEF_SCORE
+					,CONVERT(INT,ROUND(AVG(MEN_SCORE),0,0)) AVG_MEN_SCORE
+				FROM (
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?ced_no
+				 ?new_user_id
+				 ?user_id
+				 ?cust_nm
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+
+			 GROUP BY C.TREATYBRHCD,C.TREATYBRHNM
+			 ) AA
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	 <sql-service name='oba.oba030.gradeResult.org2.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>센터별 청약리스트</description>
+		<result-name>DS_LIST2</result-name>
+		<query><![CDATA[
+				SELECT
+					C.TREATYBRHCD ORG2_CD
+					,C.TREATYBRHNM ORG2_NM
+					,COUNT(A.CON_ENT_DGN_NO) CED_CNT
+					,SUM(CALL_CNT) CALL_CNT
+					,SUM(DURATION) DURATION --10 밀리세컨드
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '1' THEN 1 ELSE 0 END) AS GRADE1_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '2' THEN 1 ELSE 0 END) AS GRADE2_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '3' THEN 1 ELSE 0 END) AS GRADE3_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '4' THEN 1 ELSE 0 END) AS GRADE4_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '5' THEN 1 ELSE 0 END) AS GRADE5_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '6' THEN 1 ELSE 0 END) AS GRADE6_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '7' THEN 1 ELSE 0 END) AS GRADE7_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '8' THEN 1 ELSE 0 END) AS GRADE8_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '9' THEN 1 ELSE 0 END) AS GRADE9_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '10' THEN 1 ELSE 0 END) AS GRADE10_CNT					
+					,CONVERT(INT,ROUND(AVG(GRADE_SUM),0,0)) AVG_GRADE_SCORE
+					,CONVERT(INT,ROUND(AVG(VRS_SCORE),0,0)) AVG_VRS_SCORE
+					,CONVERT(INT,ROUND(AVG(BAN_SCORE),0,0)) AVG_BAN_SCORE
+					,CONVERT(INT,ROUND(AVG(SEC_SCORE),0,0)) AVG_SEC_SCORE
+					,CONVERT(INT,ROUND(AVG(FOC_SCORE),0,0)) AVG_FOC_SCORE
+					,CONVERT(INT,ROUND(AVG(BEF_SCORE),0,0)) AVG_BEF_SCORE
+					,CONVERT(INT,ROUND(AVG(MEN_SCORE),0,0)) AVG_MEN_SCORE
+				FROM (
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?ced_no
+				 ?new_user_id
+				 ?user_id
+				 ?cust_nm
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+
+			 GROUP BY C.TREATYBRHCD,C.TREATYBRHNM
+			 ORDER BY C.TREATYBRHCD,C.TREATYBRHNM
+			 OFFSET  CONVERT(INT,?_START) ROWS
+			 FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	 <sql-service name='oba.oba030.gradeResult.org2.all.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>센터별 청약리스트</description>
+		<result-name>DS_LIST2</result-name>
+		<query><![CDATA[
+				SELECT
+					C.TREATYBRHCD ORG2_CD
+					,C.TREATYBRHNM ORG2_NM
+					,COUNT(A.CON_ENT_DGN_NO) CED_CNT
+					,SUM(CALL_CNT) CALL_CNT
+					,SUM(DURATION) DURATION --10 밀리세컨드
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '1' THEN 1 ELSE 0 END) AS GRADE1_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '2' THEN 1 ELSE 0 END) AS GRADE2_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '3' THEN 1 ELSE 0 END) AS GRADE3_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '4' THEN 1 ELSE 0 END) AS GRADE4_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '5' THEN 1 ELSE 0 END) AS GRADE5_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '6' THEN 1 ELSE 0 END) AS GRADE6_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '7' THEN 1 ELSE 0 END) AS GRADE7_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '8' THEN 1 ELSE 0 END) AS GRADE8_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '9' THEN 1 ELSE 0 END) AS GRADE9_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '10' THEN 1 ELSE 0 END) AS GRADE10_CNT					
+					,CONVERT(INT,ROUND(AVG(GRADE_SUM),0,0)) AVG_GRADE_SCORE
+					,CONVERT(INT,ROUND(AVG(VRS_SCORE),0,0)) AVG_VRS_SCORE
+					,CONVERT(INT,ROUND(AVG(BAN_SCORE),0,0)) AVG_BAN_SCORE
+					,CONVERT(INT,ROUND(AVG(SEC_SCORE),0,0)) AVG_SEC_SCORE
+					,CONVERT(INT,ROUND(AVG(FOC_SCORE),0,0)) AVG_FOC_SCORE
+					,CONVERT(INT,ROUND(AVG(BEF_SCORE),0,0)) AVG_BEF_SCORE
+					,CONVERT(INT,ROUND(AVG(MEN_SCORE),0,0)) AVG_MEN_SCORE
+				FROM (
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?ced_no
+				 ?new_user_id
+				 ?user_id
+				 ?cust_nm
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+
+			 GROUP BY C.TREATYBRHCD,C.TREATYBRHNM
+			 ORDER BY C.TREATYBRHCD,C.TREATYBRHNM
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba030.gradeResult.user.cnt.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>상담사별 청약리스트</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+		SELECT count(*) totalcount FROM(
+				SELECT
+					C.TREATYBRHCD ORG2_CD
+					,C.TREATYBRHNM ORG2_NM
+					,C.TREATYDEPTCD ORG3_CD
+					,C.TREATYDEPTNM ORG3_NM
+					,C.USER_ID
+					,USER_NAME+'('+C.USER_ID+')' USER_NM
+					,COUNT(A.CON_ENT_DGN_NO) CED_CNT
+					,SUM(CALL_CNT) CALL_CNT
+					,SUM(DURATION) DURATION --10 밀리세컨드
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '1' THEN 1 ELSE 0 END) AS GRADE1_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '2' THEN 1 ELSE 0 END) AS GRADE2_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '3' THEN 1 ELSE 0 END) AS GRADE3_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '4' THEN 1 ELSE 0 END) AS GRADE4_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '5' THEN 1 ELSE 0 END) AS GRADE5_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '6' THEN 1 ELSE 0 END) AS GRADE6_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '7' THEN 1 ELSE 0 END) AS GRADE7_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '8' THEN 1 ELSE 0 END) AS GRADE8_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '9' THEN 1 ELSE 0 END) AS GRADE9_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '10' THEN 1 ELSE 0 END) AS GRADE10_CNT					
+					,CONVERT(INT,ROUND(AVG(GRADE_SUM),0)) AVG_GRADE_SCORE
+					,CONVERT(INT,ROUND(AVG(VRS_SCORE),0)) AVG_VRS_SCORE
+					,CONVERT(INT,ROUND(AVG(BAN_SCORE),0)) AVG_BAN_SCORE
+					,CONVERT(INT,ROUND(AVG(SEC_SCORE),0)) AVG_SEC_SCORE
+					,CONVERT(INT,ROUND(AVG(FOC_SCORE),0)) AVG_FOC_SCORE
+					,CONVERT(INT,ROUND(AVG(BEF_SCORE),0)) AVG_BEF_SCORE
+					,CONVERT(INT,ROUND(AVG(MEN_SCORE),0)) AVG_MEN_SCORE
+				FROM (
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?ced_no
+				 ?new_user_id
+				 ?user_id
+				 ?cust_nm
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+			 GROUP BY C.TREATYBRHCD,C.TREATYBRHNM,C.TREATYDEPTCD,C.TREATYDEPTNM,C.USER_ID,C.USER_NAME
+			 ) AA
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba030.gradeResult.user.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>상담사별 청약리스트</description>
+		<result-name>DS_LIST3</result-name>
+		<query><![CDATA[
+				SELECT
+					C.TREATYBRHCD ORG2_CD
+					,C.TREATYBRHNM ORG2_NM
+					,C.TREATYDEPTCD ORG3_CD
+					,C.TREATYDEPTNM ORG3_NM
+					,C.USER_ID
+					,USER_NAME+'('+C.USER_ID+')' USER_NM
+					,COUNT(A.CON_ENT_DGN_NO) CED_CNT
+					,SUM(CALL_CNT) CALL_CNT
+					,SUM(DURATION) DURATION --10 밀리세컨드
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '1' THEN 1 ELSE 0 END) AS GRADE1_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '2' THEN 1 ELSE 0 END) AS GRADE2_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '3' THEN 1 ELSE 0 END) AS GRADE3_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '4' THEN 1 ELSE 0 END) AS GRADE4_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '5' THEN 1 ELSE 0 END) AS GRADE5_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '6' THEN 1 ELSE 0 END) AS GRADE6_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '7' THEN 1 ELSE 0 END) AS GRADE7_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '8' THEN 1 ELSE 0 END) AS GRADE8_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '9' THEN 1 ELSE 0 END) AS GRADE9_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '10' THEN 1 ELSE 0 END) AS GRADE10_CNT					
+					,ISNULL(CONVERT(INT,ROUND(AVG(GRADE_SUM),0)),0) AVG_GRADE_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(VRS_SCORE),0)),0) AVG_VRS_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(BAN_SCORE),0)),0) AVG_BAN_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(SEC_SCORE),0)),0) AVG_SEC_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(FOC_SCORE),0)),0) AVG_FOC_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(BEF_SCORE),0)),0) AVG_BEF_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(MEN_SCORE),0)),0) AVG_MEN_SCORE
+				FROM (
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?ced_no
+				 ?new_user_id
+				 ?user_id
+				 ?cust_nm
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+			 GROUP BY C.TREATYBRHCD,C.TREATYBRHNM,C.TREATYDEPTCD,C.TREATYDEPTNM,C.USER_ID,C.USER_NAME
+			 ORDER BY C.TREATYBRHCD,C.TREATYBRHNM,C.TREATYDEPTCD,C.TREATYDEPTNM,C.USER_ID,C.USER_NAME
+			 OFFSET  CONVERT(INT,?_START) ROWS
+			 FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba030.gradeResult.user.all.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>상담사별 청약리스트</description>
+		<result-name>DS_LIST3</result-name>
+		<query><![CDATA[
+				SELECT
+					C.TREATYBRHCD ORG2_CD
+					,C.TREATYBRHNM ORG2_NM
+					,C.TREATYDEPTCD ORG3_CD
+					,C.TREATYDEPTNM ORG3_NM
+					,C.USER_ID
+					,USER_NAME+'('+C.USER_ID+')' USER_NM
+					,COUNT(A.CON_ENT_DGN_NO) CED_CNT
+					,SUM(CALL_CNT) CALL_CNT
+					,SUM(DURATION) DURATION --10 밀리세컨드
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '1' THEN 1 ELSE 0 END) AS GRADE1_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '2' THEN 1 ELSE 0 END) AS GRADE2_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '3' THEN 1 ELSE 0 END) AS GRADE3_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '4' THEN 1 ELSE 0 END) AS GRADE4_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '5' THEN 1 ELSE 0 END) AS GRADE5_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '6' THEN 1 ELSE 0 END) AS GRADE6_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '7' THEN 1 ELSE 0 END) AS GRADE7_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '8' THEN 1 ELSE 0 END) AS GRADE8_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '9' THEN 1 ELSE 0 END) AS GRADE9_CNT
+					,SUM(CASE WHEN ISNULL(CHG_GRADE,GRADE) = '10' THEN 1 ELSE 0 END) AS GRADE10_CNT					
+					,ISNULL(CONVERT(INT,ROUND(AVG(GRADE_SUM),0)),0) AVG_GRADE_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(VRS_SCORE),0)),0) AVG_VRS_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(BAN_SCORE),0)),0) AVG_BAN_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(SEC_SCORE),0)),0) AVG_SEC_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(FOC_SCORE),0)),0) AVG_FOC_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(BEF_SCORE),0)),0) AVG_BEF_SCORE
+					,ISNULL(CONVERT(INT,ROUND(AVG(MEN_SCORE),0)),0) AVG_MEN_SCORE
+				FROM (
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						SUM(Y.DURATION) DURATION
+				 FROM ms_stt_meta Z, ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				 and Z.CON_ENT_DGN_DATE between '?SDATE' and '?EDATE'
+				 ?istp_cd
+				 ?prod_cd
+				 ?ced_no
+				 ?new_user_id
+				 ?user_id
+				 ?cust_nm
+				 ?qc_nm
+				 ?anl_stat
+				 GROUP BY CON_ENT_DGN_NO) A
+				 LEFT OUTER JOIN  ms_grade_sum B ON A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+				 LEFT OUTER JOIN  ms_usermaster C ON C.USER_ID=A.USER_ID
+				 WHERE 1=1
+				 ?org1_cd
+				 ?org2_flag
+				 ?org3_cd
+				 ?grade
+			 GROUP BY C.TREATYBRHCD,C.TREATYBRHNM,C.TREATYDEPTCD,C.TREATYDEPTNM,C.USER_ID,C.USER_NAME
+			 ORDER BY C.TREATYBRHCD,C.TREATYBRHNM,C.TREATYDEPTCD,C.TREATYDEPTNM,C.USER_ID,C.USER_NAME
+		]]></query>
+		<parameter name='org1_cd' value="AND C.TREATYHQCD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND C.TREATYBRHCD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND C.TREATYBRHCD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND C.TREATYDEPTCD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND Z.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND Z.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND Z.PROD_CD = '?PROD_CD'" default="" ></parameter>
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='qc_nm' value="AND Z.ASS_USER_ID LIKE CONCAT(?QC_NM,'%')" default="" />
+		<parameter name='cust_nm' value="AND Z.CON_P_CONT_NAME = '?CUST_NM'" default="" />
+		<parameter name='grade' value="AND ISNULL(B.CHG_GRADE,B.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND Z.GRD_FLAG = '?ANL_STAT'" default="AND Z.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND Z.USER_ID IN (SELECT USER_ID FROM ms_usermaster WHERE WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00))" default="" />
+	</sql-service>
+
+	<sql-service name='oba.oba010t1.getInfo.sel'  datasource="aig_tm" paging="false" type="prepared">
+		<description>가입설계번호의 상세정보 가져오기</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+		SELECT        
+                CON_ENT_DGN_NO	CED_NO
+                ,m.TM_NO
+		        ,TM_TMR_ID 
+		        ,TM_TMR_NAME
+		        ,TM_TMR_NAME||'('||TM_TMR_ID||')' USER_NM --상담사명
+		        ,m.CON_I_KIND_CD AS PROD_CD --상품코드
+		        ,(SELECT ITEM_NAME FROM TSOWN.TBIA101 WHERE ITEM_CD = m.CON_I_KIND_CD) AS PROD_NM --상품명
+		        ,(SELECT TREATYHQNM||'/'||TREATYBRHNM||'/'||TREATYDEPTNM FROM TSOWN.TB_USER U WHERE m.TM_TMR_ID =U.USERID)  AS DEPT_FULLNM -- 소속
+			--  ,m.TM_PROCESSING_GB AS JUDGE_STAT_CD -- 심사상태코드
+                ,(SELECT CODENAME FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = 'CMP025' AND CODE = M.TM_PROCESSING_GB) AS JUDGE_STAT --심사상태
+		        ,M.CON_P_CONT_NAME CON_NAME -- 계약자명
+		        ,CON_IP_ISD_NAME P_NAME -- 피보험자명
+		        ,CON_CON_OLT_DEPOSIT_NM NAB_NAME --납입자명
+		        ,CON_CON_MONTH_PREM MONTH_PREM --월보험료
+		        ,RNW_PREM --갱신보험료
+		        ,m.CON_CON_Y_DEDUCT_AMT DEDUCT_AMT --만기환급금
+		    --	,d.CON_IP_CONT_RELATION_CD REL_CD --계피관계
+                ,(SELECT CODENAME FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = 'CMP017' AND CODE = CON_IP_CONT_RELATION_CD) AS REL_NM 
+		    --	,PLS_DECRYPT_B64(CON_IP_ISD_CD) AS P_AGE --피보험자 보험연령 구하기위한 주민번호
+                ,CON_IP_CONT_AGE P_AGE --피보험자 보험연령
+		        ,CASE WHEN d.CON_IP_JOB_CLASS IS NOT NULL THEN d.CON_IP_JOB_CLASS||'급' ELSE '' END AS JOB_CLASS--직업급수
+		        ,DECODE(M.MARKETING_AGREEMENT,'Y','예','아니오') AS PROD_DESC --상품소개
+		        ,DECODE(DUP_YN,'Y','예','아니오') AS DUP_YN --승환계약
+		        ,DECODE(d.HLTH_CHKU_DC_TRGT_YN,'Y','예','아니오') AS HCDT_YN --검진할인대상
+		        ,DECODE(CON_AGREE_YN,'Y','예','아니오') AS CON_AGREE_YN  --전자적사전동의
+		        ,DECODE(PROD_SMRY_SMS_SNDN_CSNT_YN,'Y','예',DECODE(PROD_SMRY_SMS_SNDN_CSNT_YN,'N','아니오',PROD_SMRY_SMS_SNDN_CSNT_YN)) AS SIXTYFIVE_YN --65세 안내장 발송 동의
+		        ,DECODE(RJCT_NTC_SMS_SNDN_CSNT_YN,'Y','예','아니오') AS  RJCT_SMS_YN --미청약거절통보 SMS 안내동의
+		         ,NVL(  (SELECT LISTAGG(DMBO_CD, '&') WITHIN GROUP (ORDER BY ROWNUM) FROM ( 
+		                 SELECT   TB1.INSUR_AMT, -- ORDER BY 를 DMBO_GB로만 하기때문에 그다음 ORDER절이 SELECT절에서 결정됨. 부득이 TM과 SELECT절 동일히 맞춤
+					    TB1.BASIC_PREM,
+					    TB2.DMBO_NAME,
+					    DECODE(TB2.PREV_TERM_TYPE,'1','선택','2','선택2','3','선택3','4','선택4','5','선택5','99','기본','0','일시','20','20세', DECODE(TB2.DMBO_GB,'1','기본','선택')) AS DMBO_GB_NAME_PREV,
+					    DECODE(TB2.DMBO_GB,'1','기본','선택') AS DMBO_GB_NAME,
+					    M1.CON_ENT_DGN_DATE,
+					    TB1.APPY_PREM,
+					    TB1.CARGO_TYPE,
+					    TB2.ITEM_CD,
+					    TB1.DMBO_CD,
+					    M1.CON_CON_GRANT_TYPE,
+					    TB3.SORTKEY,
+					    DMBO_GB 
+					     FROM TSOWN.TB_INSU_PLAN_MAST m1,TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2,TSOWN.TB_CODEBOOK TB3 
+		                WHERE M1.CON_ENT_DGN_NO =?CED_NO
+		               	AND TB2.ITEM_CD =m1.CON_I_KIND_CD
+		                AND TB1.DMBO_CD = TB2.DMBO_CD 
+		                and TB1.TM_NO = M1.TM_NO
+		                and  TB3.CODETYPE = TSOWN.FN_CODEBOOK('EST029',TB2.ITEM_CD) || 'DMV' 
+		                AND TB3.CODE =M1.CON_CON_GRANT_TYPE || TB2.DMBO_CD
+                		ORDER BY DECODE(TB2.DMBO_GB,'1','기본','선택')
+				)),'') AS DMBO_CD
+                ,NVL(  (SELECT LISTAGG(DMBO_NAME, '&') WITHIN GROUP (ORDER BY ROWNUM) FROM (
+		                 SELECT   TB1.INSUR_AMT, -- ORDER BY 를 DMBO_GB로만 하기때문에 그다음 ORDER절이 SELECT절에서 결정됨. 부득이 TM과 SELECT절 동일히 맞춤
+					    TB1.BASIC_PREM,
+					    TB2.DMBO_NAME,
+					    DECODE(TB2.PREV_TERM_TYPE,'1','선택','2','선택2','3','선택3','4','선택4','5','선택5','99','기본','0','일시','20','20세', DECODE(TB2.DMBO_GB,'1','기본','선택')) AS DMBO_GB_NAME_PREV,
+					    DECODE(TB2.DMBO_GB,'1','기본','선택') AS DMBO_GB_NAME,
+					    M1.CON_ENT_DGN_DATE,
+					    TB1.APPY_PREM,
+					    TB1.CARGO_TYPE,
+					    TB2.ITEM_CD,
+					    TB1.DMBO_CD,
+					    M1.CON_CON_GRANT_TYPE,
+					    TB3.SORTKEY,
+					    DMBO_GB 
+					    FROM TSOWN.TB_INSU_PLAN_MAST m1,TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2,TSOWN.TB_CODEBOOK TB3
+		                WHERE M1.CON_ENT_DGN_NO =?CED_NO
+		                AND TB2.ITEM_CD =m1.CON_I_KIND_CD
+		                AND TB1.DMBO_CD = TB2.DMBO_CD 
+		                and TB1.TM_NO = M1.TM_NO
+		                and  TB3.CODETYPE = TSOWN.FN_CODEBOOK('EST029',TB2.ITEM_CD) || 'DMV' 
+		                AND TB3.CODE =M1.CON_CON_GRANT_TYPE || TB2.DMBO_CD
+                		ORDER BY DECODE(TB2.DMBO_GB,'1','기본','선택')
+                )),'') AS DMBO_NM
+                ,NVL(  (SELECT LISTAGG(DECODE(DMBO_GB,'1','기본','선택'), '&') WITHIN GROUP (ORDER BY ROWNUM) FROM (
+		                SELECT   TB1.INSUR_AMT, -- ORDER BY 를 DMBO_GB로만 하기때문에 그다음 ORDER절이 SELECT절에서 결정됨. 부득이 TM과 SELECT절 동일히 맞춤
+					    TB1.BASIC_PREM,
+					    TB2.DMBO_NAME,
+					    DECODE(TB2.PREV_TERM_TYPE,'1','선택','2','선택2','3','선택3','4','선택4','5','선택5','99','기본','0','일시','20','20세', DECODE(TB2.DMBO_GB,'1','기본','선택')) AS DMBO_GB_NAME_PREV,
+					    DECODE(TB2.DMBO_GB,'1','기본','선택') AS DMBO_GB_NAME,
+					    M1.CON_ENT_DGN_DATE,
+					    TB1.APPY_PREM,
+					    TB1.CARGO_TYPE,
+					    TB2.ITEM_CD,
+					    TB1.DMBO_CD,
+					    M1.CON_CON_GRANT_TYPE,
+					    TB3.SORTKEY,
+					    DMBO_GB 
+					   FROM TSOWN.TB_INSU_PLAN_MAST m1,TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2,TSOWN.TB_CODEBOOK TB3
+		                WHERE M1.CON_ENT_DGN_NO =?CED_NO
+		                AND TB2.ITEM_CD =m1.CON_I_KIND_CD
+		                AND TB1.DMBO_CD = TB2.DMBO_CD 
+		                and TB1.TM_NO = M1.TM_NO
+		                and  TB3.CODETYPE = TSOWN.FN_CODEBOOK('EST029',TB2.ITEM_CD) || 'DMV' 
+		                AND TB3.CODE =M1.CON_CON_GRANT_TYPE || TB2.DMBO_CD
+		                ORDER BY DECODE(TB2.DMBO_GB,'1','기본','선택')
+                )),'') AS DMBO_GB
+                 ,NVL(  (SELECT LISTAGG(INSUR_AMT, '&') WITHIN GROUP (ORDER BY ROWNUM) FROM (
+			      		SELECT   TB1.INSUR_AMT, -- ORDER BY 를 DMBO_GB로만 하기때문에 그다음 ORDER절이 SELECT절에서 결정됨. 부득이 TM과 SELECT절 동일히 맞춤
+					    TB1.BASIC_PREM,
+					    TB2.DMBO_NAME,
+					    DECODE(TB2.PREV_TERM_TYPE,'1','선택','2','선택2','3','선택3','4','선택4','5','선택5','99','기본','0','일시','20','20세', DECODE(TB2.DMBO_GB,'1','기본','선택')) AS DMBO_GB_NAME_PREV,
+					    DECODE(TB2.DMBO_GB,'1','기본','선택') AS DMBO_GB_NAME,
+					    M1.CON_ENT_DGN_DATE,
+					    TB1.APPY_PREM,
+					    TB1.CARGO_TYPE,
+					    TB2.ITEM_CD,
+					    TB1.DMBO_CD,
+					    M1.CON_CON_GRANT_TYPE,
+					    TB3.SORTKEY,
+					    DMBO_GB  
+		               FROM TSOWN.TB_INSU_PLAN_MAST m1,TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2,TSOWN.TB_CODEBOOK TB3
+		               WHERE M1.CON_ENT_DGN_NO =?CED_NO
+		               AND TB2.ITEM_CD =m1.CON_I_KIND_CD
+		               AND TB1.DMBO_CD = TB2.DMBO_CD 
+		               and TB1.TM_NO = M1.TM_NO
+		               and  TB3.CODETYPE = TSOWN.FN_CODEBOOK('EST029',TB2.ITEM_CD) || 'DMV' 
+		               AND TB3.CODE =M1.CON_CON_GRANT_TYPE || TB2.DMBO_CD
+		               ORDER BY DECODE(TB2.DMBO_GB,'1','기본','선택')
+                )),'') AS INSUR_AMT
+                 ,NVL(  (SELECT LISTAGG(BASIC_PREM, '&') WITHIN GROUP (ORDER BY ROWNUM) FROM (
+          	      		SELECT   TB1.INSUR_AMT, -- ORDER BY 를 DMBO_GB로만 하기때문에 그다음 ORDER절이 SELECT절에서 결정됨. 부득이 TM과 SELECT절 동일히 맞춤
+					    TB1.BASIC_PREM,
+					    TB2.DMBO_NAME,
+					    DECODE(TB2.PREV_TERM_TYPE,'1','선택','2','선택2','3','선택3','4','선택4','5','선택5','99','기본','0','일시','20','20세', DECODE(TB2.DMBO_GB,'1','기본','선택')) AS DMBO_GB_NAME_PREV,
+					    DECODE(TB2.DMBO_GB,'1','기본','선택') AS DMBO_GB_NAME,
+					    M1.CON_ENT_DGN_DATE,
+					    TB1.APPY_PREM,
+					    TB1.CARGO_TYPE,
+					    TB2.ITEM_CD,
+					    TB1.DMBO_CD,
+					    M1.CON_CON_GRANT_TYPE,
+					    TB3.SORTKEY,
+					    DMBO_GB   
+                 		FROM TSOWN.TB_INSU_PLAN_MAST m1,TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2,TSOWN.TB_CODEBOOK TB3
+		               WHERE M1.CON_ENT_DGN_NO =?CED_NO
+		               AND TB2.ITEM_CD =m1.CON_I_KIND_CD
+		               AND TB1.DMBO_CD = TB2.DMBO_CD 
+		               and TB1.TM_NO = M1.TM_NO
+		               and  TB3.CODETYPE = TSOWN.FN_CODEBOOK('EST029',TB2.ITEM_CD) || 'DMV' 
+		               AND TB3.CODE =M1.CON_CON_GRANT_TYPE || TB2.DMBO_CD
+		               ORDER BY DECODE(TB2.DMBO_GB,'1','기본','선택')
+                )),'') AS BASIC_PREM
+                ,EDD_REGN_TRGT_YN EDD_REGN_YN -- EDD 등록대상여부
+			    ,DECODE(PROFIT_PROMISE_YN,'Y','예','아니오') PROFIT_PROMISE_YN --사망보험금수익자
+			    ,DECODE(FATCA_YN, NULL, '', 'Y', '예', '아니오') FATCA_YN --FATCA 대상자 여부
+		      --  ,NVL( (SELECT LISTAGG(TB1.DMBO_CD, '&') WITHIN GROUP (ORDER BY (SELECT SORTKEY FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = TB2.ITEM_CD||'DMV' AND CODE='001'||TB2.DMBO_CD)) FROM TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2 where TB1.DMBO_CD = TB2.DMBO_CD and TB1.TM_NO = m.TM_NO and TB2.ITEM_CD = m.CON_I_KIND_CD),'') AS DMBO_CD 코드북 SORTKEY 조회
+               -- ,NVL((SELECT LISTAGG(DMBO_NAME, '&') WITHIN GROUP (ORDER BY (SELECT SORTKEY FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = TB2.ITEM_CD||'DMV' AND CODE='001'||TB2.DMBO_CD))  from TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2 where TB1.DMBO_CD = TB2.DMBO_CD and TB1.TM_NO = m.TM_NO and TB2.ITEM_CD = m.CON_I_KIND_CD),'') as DMBO_NM
+               -- ,NVL((SELECT LISTAGG(CASE WHEN DMBO_GB='1' THEN '기본' ELSE '선택' END, '&') WITHIN GROUP (ORDER BY (SELECT SORTKEY FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = TB2.ITEM_CD||'DMV' AND CODE='001'||TB2.DMBO_CD))  from TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2 where TB1.DMBO_CD = TB2.DMBO_CD and TB1.TM_NO = m.TM_NO and TB2.ITEM_CD = m.CON_I_KIND_CD),'') as DMBO_GB
+			   -- ,NVL( (SELECT LISTAGG(INSUR_AMT, '&') WITHIN GROUP (ORDER BY (SELECT SORTKEY FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = TB2.ITEM_CD||'DMV' AND CODE='001'||TB2.DMBO_CD)) FROM TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2 where TB1.DMBO_CD = TB2.DMBO_CD and TB1.TM_NO = m.TM_NO and TB2.ITEM_CD = m.CON_I_KIND_CD),'') AS INSUR_AMT
+			   -- ,NVL( (SELECT LISTAGG(BASIC_PREM, '&') WITHIN GROUP (ORDER BY (SELECT SORTKEY FROM TSOWN.TB_CODEBOOK WHERE CODETYPE = TB2.ITEM_CD||'DMV' AND CODE='001'||TB2.DMBO_CD)) FROM TSOWN.TBIC063 TB1, TSOWN.TBIA102 TB2 where TB1.DMBO_CD = TB2.DMBO_CD and TB1.TM_NO = m.TM_NO and TB2.ITEM_CD = m.CON_I_KIND_CD),'') AS BASIC_PREM
+		FROM TSOWN.TB_INSU_PLAN_MAST m, TSOWN.TB_INSU_PLAN_DETAIL d
+		WHERE m.TM_NO = d.TM_NO
+		AND m.CON_ENT_DGN_NO = ?CED_NO
+		]]></query>
+	 	<!-- <parameter name='ced_no' value="AND m.CON_ENT_DGN_NO = ?CED_NO" default="" />  -->
+	</sql-service>
+	
+	<sql-service name='oba.oba010p1.getReAnlStat.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>가입설계번호의 상세정보 가져오기</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+			SELECT DISTINCT
+				CASE WHEN ASS_FLAG ='Y' AND GRD_FLAG <> 'Y' THEN 'TRUE' ELSE 'FALSE' END RE_ANL_YN
+				,GRD_FLAG 
+				 FROM ms_stt_meta Z 
+				 --WHERE Z.GRD_FLAG <> 'E'
+				 WHERE 1=1
+				 ?ced_no
+		]]></query>
+		<parameter name='ced_no' value="AND Z.CON_ENT_DGN_NO = ?CED_NO" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010p1.getUserGroupCd.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>가입설계번호의 상세정보 가져오기</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT ISNULL(WORK_GROUP_CD,USER_GROUP_CD) USER_GROUP_CD
+				 FROM ms_usermaster Z 
+				 WHERE Z.USER_ID = ?USER_ID
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010p1.getUcid.sel'  datasource="aig_rec" paging="false" type="prepared">
+		<description>가입설계번호의 콜일시 가져오기</description>
+		<result-name>DS_SPO</result-name>
+		<query><![CDATA[
+  			SELECT
+				FILEID UCID,
+				substring(RECSTARTDT,0,5)+'-'+substring(RECSTARTDT,5,2)+'-'+substring(RECSTARTDT,7,2)+' '+substring(RECSTARTDT,9,2)+':'+substring(RECSTARTDT,11,2)+':'+substring(RECSTARTDT,13,2) UCID_DATE,
+				OrgFileFullPath FILE_FULL_PATH,
+				'' AS DATETIME,
+				'' ANL_STAT,
+				CASE WHEN LEN(RjctNtcYn) > 0 OR LEN(TMRjctNtcRegnYn)>0 THEN 'Y' ELSE 'N' END REJECT_YN
+			FROM Sponsor_CallInfo A WITH (NOLOCK)
+			WHERE TPANO LIKE CONCAT('%',?CED_NO,'%')
+			AND STT_FLAG = 'Y'
+			ORDER BY UCID_DATE DESC
+		]]></query>
+	</sql-service>
+	
+		<sql-service name='oba.oba010p1.getDuration.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>해당 콜들의 duration 가져오기</description>
+		<result-name>DS_DURA</result-name>
+		<query><![CDATA[
+  			SELECT 
+				DISTINCT
+				B.UCID
+				,B.DURATION
+				,'' SUM_DURA
+				FROM ms_stt_rslt_merge B 
+				WHERE 1=1
+				AND B.UCID = ?UCID
+		]]></query>
+		</sql-service>
+		
+		<sql-service name='oba.oba010p1.getMetaUcid.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>분석된 콜 가져오기</description>
+		<result-name>DS_META</result-name>
+		<query><![CDATA[
+  			SELECT 
+				DISTINCT
+				B.UCID
+				FROM ms_stt_meta B 
+				WHERE b.CON_ENT_DGN_NO = ?CED_NO
+		]]></query>
+		</sql-service>
+		
+		<sql-service name='oba.oba010p1.timestamp.upd'  datasource="is_stat" paging="false" type="prepared">
+		<description>INSEPECT TIMESTAMP update</description>
+		<query><![CDATA[
+		--POP OPEN
+		IF EXISTS (SELECT 1 FROM ms_ins_timestamp WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID =?USER_ID AND CON_ENT_DGN_NO <> ?CED_NO and END_TIME IS NULL) 
+					UPDATE ms_ins_timestamp  -- 비정상 종료 되어서 END_TIME 없는데 그 다음 설계가 30분 전에 들어오면 그 START_TIME으로 아니면 세션 타임아웃 시간으로(30분) 강제 업데이트
+						SET 
+							END_TIME = CASE WHEN(DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))) > 1800  THEN REPLACE(CONVERT(VARCHAR(8),DATEADD(MINUTE,30,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':'))),114),':','') ELSE FORMAT(GETDATE(),'HHmmss') END
+							,WORK_TIME = CASE WHEN(DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))) > 1800  THEN '1800' ELSE DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss')) END
+							,CHG_ID = 'SYSTEM'
+							,CHG_DATE = FORMAT(GETDATE(),'yyyyMMddHHmmss')
+						WHERE REG_DATE = (SELECT MAX(REG_DATE) FROM ms_ins_timestamp WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID =?USER_ID AND CON_ENT_DGN_NO <> ?CED_NO and END_TIME IS NULL)
+						AND  WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID =?USER_ID AND CON_ENT_DGN_NO <> ?CED_NO and END_TIME IS NULL
+		
+		--POP CLOSE
+		IF EXISTS (SELECT 1 FROM ms_ins_timestamp WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID = ?USER_ID and END_TIME IS NULL) 
+			UPDATE ms_ins_timestamp 
+				SET 
+					END_TIME = FORMAT(GETDATE(),'HHmmss')
+					,WORK_TIME = DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))
+					,CHG_ID = ?USER_ID
+					,CHG_DATE = FORMAT(GETDATE(),'yyyyMMddHHmmss')
+				WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID = ?USER_ID and END_TIME IS NULL 
+			ELSE
+		--POP OPEN	
+			INSERT INTO ms_ins_timestamp (WORK_DATE,USER_ID,WORK_GUBUN,CON_ENT_DGN_NO,START_TIME,END_TIME,WORK_TIME,CONNECT_IP,REG_ID,REG_DATE,CHG_ID,CHG_DATE) 
+			SELECT	FORMAT(GETDATE(),'yyyyMMdd'),
+					?USER_ID,
+					?WORK_GUBUN,
+					?CED_NO,
+			 		FORMAT(GETDATE(),'HHmmss'),
+			 		NULL,
+			 		NULL,
+			 		?CONNECT_IP,
+			 		?USER_ID,
+			 		FORMAT(GETDATE(),'yyyyMMddHHmmss'),
+			 		?USER_ID,
+			 		FORMAT(GETDATE(),'yyyyMMddHHmmss')
+			WHERE ?CED_NO IS NOT NULL
+			AND ?CED_NO <> 'NULL'		
+
+		]]></query>
+		<parameter name='ced_no' value="?CED_NO" default="null" /> <!-- null 값 넣어줘야 첫번째 IF문 count 0됨 -->
+		</sql-service>
+		
+		<sql-service name='oba.oba010p1.sessionTimeout.timestamp.upd'  datasource="is_stat" paging="false" type="prepared">
+		<description>INSEPECT TIMESTAMP update</description>
+		<query><![CDATA[
+			UPDATE ms_ins_timestamp -- 현재 팝업에서 새로고침하거나, 30분 지나서 세션타임아웃나거나 할 때 해당 처리됨.
+				SET 
+					END_TIME = FORMAT(GETDATE(),'HHmmss')
+					,WORK_TIME = DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))
+					,CHG_ID = 'SYSTEM'
+					,CHG_DATE = FORMAT(GETDATE(),'yyyyMMddHHmmss')
+				WHERE START_TIME = (SELECT MAX(START_TIME) FROM ms_ins_timestamp 
+									WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') 
+									AND END_TIME IS NULL 
+									AND CONNECT_IP = ?CONNECT_IP)
+				AND WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') 
+				AND END_TIME IS NULL 
+				AND CONNECT_IP = ?CONNECT_IP					
+		]]></query>
+		</sql-service>
+		
+		<sql-service name='oba.oba010p1.sessionTimeout.workstat.upd'  datasource="is_stat" paging="false" type="prepared">
+		<description>INSEPECT TIMESTAMP update</description>
+		<query><![CDATA[
+			UPDATE ms_qc_work_stat 
+				SET 
+					END_TIME = FORMAT(GETDATE(),'HHmmss')
+					,WORK_TIME = DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))
+					,CHG_ID = 'SYSTEM'
+					,CHG_DATE = FORMAT(GETDATE(),'yyyyMMddHHmmss')
+				WHERE START_TIME = (SELECT MAX(START_TIME) FROM MS_QC_WORK_STAT 
+									WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') 
+									AND END_TIME IS NULL 
+									AND CONNECT_IP = ?CONNECT_IP)
+				AND WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') 
+				AND  END_TIME IS NULL 
+				AND WORK_GUBUN = '0'	-- 업무중일때만/휴식 교육일 때는 상태 업데이트 하지 않음
+				AND CONNECT_IP = ?CONNECT_IP					
+		]]></query>
+		</sql-service>
+		
+		<sql-service name='oba.oba010p1.setWorkStat.upd'  datasource="is_stat" paging="false" type="prepared">
+		<description>workStat update</description>
+		<query><![CDATA[
+		
+		--btn click : session data exist 
+		IF EXISTS (SELECT 1 FROM MS_QC_WORK_STAT WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID =?USER_ID AND WORK_GUBUN <> ?WORK_GUBUN and END_TIME IS NULL) 
+					UPDATE MS_QC_WORK_STAT -- 휴식,교육은 세션타임아웃시간보다 길수있기때문에 무조건 다른 상태로 바꾼 시간으로 종료시간 업데이트
+						SET 
+							END_TIME = FORMAT(GETDATE(),'HHmmss')
+							,WORK_TIME = DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))
+							,CHG_ID = ?USER_ID
+							,CHG_DATE = FORMAT(GETDATE(),'yyyyMMddHHmmss')
+						WHERE REG_DATE = (SELECT MAX(REG_DATE) FROM MS_QC_WORK_STAT WHERE USER_ID =?USER_ID AND WORK_GUBUN <> ?WORK_GUBUN and END_TIME IS NULL)
+						AND USER_ID =?USER_ID AND WORK_GUBUN <> ?WORK_GUBUN and END_TIME IS NULL
+		
+		--btn click & logout : session data dose not exist	
+		IF EXISTS (SELECT 1 FROM MS_QC_WORK_STAT WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID = ?USER_ID AND WORK_GUBUN= ?WORK_GUBUN and END_TIME IS NULL) 
+			UPDATE MS_QC_WORK_STAT 
+				SET 
+					END_TIME = FORMAT(GETDATE(),'HHmmss')
+					,WORK_TIME = DATEDIFF(ss,CONVERT(DATETIME,STUFF(STUFF(STUFF(WORK_DATE+START_TIME,9,0,' '),12,0,':'),15,0,':')), FORMAT(GETDATE(),'yyyy-MM-dd HH:mm:ss'))
+					,CHG_ID = ?USER_ID
+					,CHG_DATE = FORMAT(GETDATE(),'yyyyMMddHHmmss')
+				WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID = ?USER_ID AND WORK_GUBUN= ?WORK_GUBUN and END_TIME IS NULL
+			ELSE
+		--btn click : session data exist 	
+			INSERT INTO MS_QC_WORK_STAT (WORK_DATE,USER_ID,WORK_GUBUN,START_TIME,END_TIME,CONNECT_IP,REG_ID,REG_DATE,CHG_ID,CHG_DATE) 
+			 values (
+					FORMAT(GETDATE(),'yyyyMMdd'),
+					?USER_ID,
+					?WORK_GUBUN,
+			 		FORMAT(GETDATE(),'HHmmss'),
+			 		NULL,
+			 		?CONNECT_IP,
+			 		?USER_ID,
+			 		FORMAT(GETDATE(),'yyyyMMddHHmmss'),
+			 		?USER_ID,
+			 		FORMAT(GETDATE(),'yyyyMMddHHmmss'));
+
+		]]></query>
+		<parameter name='work_gubun' value="?WORK_GUBUN" default="'0'" /> <!-- 로그아웃으로 세션정보 안넘어왔을 때는 업무 상태일때만 업데이트 해줌 -->
+		</sql-service>
+		
+		<sql-service name='oba.oba010p1.getNowStat.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>현재 QC업무상태 가져오기</description>
+		<result-name>DS_WORK_STAT</result-name>
+		<query><![CDATA[
+  			SELECT 
+				WORK_GUBUN
+			FROM ms_qc_work_stat B 
+			WHERE WORK_DATE = FORMAT(GETDATE(),'yyyyMMdd') AND USER_ID =?USER_ID and END_TIME IS NULL
+		]]></query>
+		</sql-service>
+		
+	<!--멀티센터,상담사 안했음. 현재 쓰지 않는 화면-->
+	<sql-service name='oba.oba070.getOmitMentRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>필수멘트 누락항목 결과 조회</description>
+		<result-name>oba.oba070.getOmitMentRes.sel</result-name>
+		<query><![CDATA[
+  			SELECT ?sql1
+			FROM MS_DEPT D LEFT OUTER JOIN(
+			SELECT
+					?sql2
+			FROM (
+			SELECT S.MENT_CD, M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE, M.USER_ID, M.TREATYHQCD, M.TREATYHQNM, M.TREATYBRHCD, M.TREATYBRHNM, M.TREATYDEPTCD, M.TREATYDEPTNM
+			FROM (SELECT MENT_CD, CON_ENT_DGN_NO, COUNT, USER_ID, TREATYHQCD, TREATYHQNM, TREATYBRHCD, TREATYBRHNM, TREATYDEPTCD, TREATYDEPTNM
+			       FROM ms_search_sum SS WHERE TYPE = 2 AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=SS.CON_ENT_DGN_NO)  <> 'E') S
+			RIGHT OUTER JOIN
+				  (SELECT DISTINCT M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE,M.USER_ID, TREATYHQCD, TREATYHQNM, TREATYBRHCD, TREATYBRHNM, TREATYDEPTCD, TREATYDEPTNM
+				   FROM ms_stt_meta M LEFT OUTER JOIN ms_grade_sum G ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO, ms_usermaster U 
+				   WHERE M.USER_ID = U.USER_ID 
+				   AND SRC_FLAG = 'Y'
+				   AND M.CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+				   ?ced_no
+				   ?user_id
+				   ?anl_stat
+				   ?grade
+				   ?istp_cd
+				   ?prod_cd
+				   ?new_user_sql
+				   ) M
+			ON S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+			) R
+			GROUP BY ?groupby1) R
+			ON ?join_sql
+			AND D.USE_YN = 'Y'
+			?org1_cd
+			?org2_cd
+			?org3_cd
+			GROUP BY ?groupby2
+		]]></query>
+		<parameter name='org1_cd' value="AND D.ORG1_CD = ?ORG1_CD" default="" />
+		<parameter name='org2_cd' value="AND D.ORG2_CD in (?ORG2_CD)" default="" />
+		<parameter name='org3_cd' value="AND D.ORG3_CD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO LIKE '%?CED_NO%'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_YN'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='grade' value="AND G.GRADE = ?GRADE" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba070.getOmitMentByUserRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>필수멘트 누락항목 결과 조회</description>
+		<result-name>oba.oba070.getOmitMentByUserRes.sel</result-name>
+		<query><![CDATA[
+  			
+  			SELECT TREATYHQCD, TREATYBRHCD, TREATYDEPTCD, USER_ID,TREATYHQNM,  TREATYBRHNM, TREATYDEPTNM, USER_NAME,
+  				   ?sql1
+  			FROM (
+	  			SELECT
+						TREATYHQCD, TREATYBRHCD, TREATYDEPTCD, USER_ID,TREATYHQNM,  TREATYBRHNM, TREATYDEPTNM, USER_NAME,
+						?sql2
+				FROM (
+				SELECT S.MENT_CD, M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE, M.USER_ID, M.USER_NAME,M.TREATYHQCD, M.TREATYHQNM, M.TREATYBRHCD, M.TREATYBRHNM, M.TREATYDEPTCD, M.TREATYDEPTNM
+				FROM (SELECT MENT_CD, CON_ENT_DGN_NO, COUNT, USER_ID, TREATYHQCD, TREATYHQNM, TREATYBRHCD, TREATYBRHNM, TREATYDEPTCD, TREATYDEPTNM
+				       FROM ms_search_sum SS WHERE TYPE = 2 AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=SS.CON_ENT_DGN_NO)  <> 'E') S
+				RIGHT OUTER JOIN
+					  (SELECT DISTINCT M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE,M.USER_ID, U.USER_NAME,TREATYHQCD, TREATYHQNM, TREATYBRHCD, TREATYBRHNM, TREATYDEPTCD, TREATYDEPTNM
+					   FROM ms_stt_meta M LEFT OUTER JOIN ms_grade_sum G ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO, ms_usermaster U 
+					   WHERE M.USER_ID = U.USER_ID 
+					   AND SRC_FLAG = 'Y'
+					   AND M.CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+					   ?org1_cd
+					   ?org2_cd
+					   ?org3_cd
+					   ?user_id
+					   ?ced_no
+					   ?anl_stat
+					   ?istp_cd
+					   ?prod_cd
+					   ?grade
+					   ?new_user_sql
+					   ) M
+				ON S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+				) R
+				GROUP BY TREATYHQCD, TREATYHQNM, TREATYBRHCD, TREATYBRHNM, TREATYDEPTCD, TREATYDEPTNM,USER_ID, USER_NAME, CON_ENT_DGN_NO
+			) RE
+			GROUP BY TREATYHQCD, TREATYHQNM, TREATYBRHCD, TREATYBRHNM, TREATYDEPTCD, TREATYDEPTNM,USER_ID, USER_NAME
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_cd' value="AND U.TREATYBRHCD in (?ORG2_CD)" default="" />
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND M.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO LIKE '%?CED_NO%'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_YN'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='grade' value="AND G.GRADE = ?GRADE" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+	</sql-service>
+	
+	
+
+	<sql-service name='oba.oba070.getCountByDept1.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>필수멘트 누락항목 결과 조회(조직2레벨 기준)</description>
+		<result-name>oba.oba070.getCountByDept1.sel</result-name>
+		<query><![CDATA[
+  			SELECT TREATYBRHCD AS ORG2_CD, COUNT(TREATYBRHCD) AS DEPT_CNT
+			FROM (SELECT DISTINCT M.CON_ENT_DGN_NO, USER_ID 
+				  FROM ms_stt_meta M LEFT OUTER JOIN ms_grade_sum G 
+				  ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+				  WHERE 1=1 
+				  AND SRC_FLAG = 'Y'
+				  AND M.CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+				  ?ced_no
+				  ?user_id
+				  ?anl_stat
+				  ?grade
+				  ?istp_cd
+				  ?prod_cd
+				  ) M
+				  ,ms_usermaster U
+			WHERE M.USER_ID = U.USER_ID
+			?org1_cd
+			?org2_cd
+			?org3_cd
+			?new_user_sql
+			GROUP BY U.TREATYBRHCD
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_cd' value="AND U.TREATYBRHCD in (?ORG2_CD)" default="" />
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND U.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO LIKE '%?CED_NO%'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_YN'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='grade' value="AND G.GRADE = ?GRADE" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba070.getCountByDept2.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>필수멘트 누락항목 결과 조회(조직3레벨 기준)</description>
+		<result-name>oba.oba070.getCountByDept2.sel</result-name>
+		<query><![CDATA[
+  			SELECT U.TREATYDEPTCD AS ORG3_CD, COUNT(U.TREATYDEPTCD) AS DEPT_CNT
+			FROM (SELECT DISTINCT M.CON_ENT_DGN_NO, USER_ID 
+				  FROM ms_stt_meta M LEFT OUTER JOIN ms_grade_sum G 
+				  ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+				  WHERE 1=1 
+				  AND SRC_FLAG = 'Y'
+				  AND M.CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+				  ?ced_no
+				  ?user_id
+				  ?anl_stat
+				  ?grade
+				  ?istp_cd
+				  ?prod_cd
+				  ) M
+				  ,ms_usermaster U
+			WHERE M.USER_ID = U.USER_ID
+			?org1_cd
+			?org2_cd
+			?org3_cd
+			?new_user_sql
+			GROUP BY U.TREATYDEPTCD
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_cd' value="AND U.TREATYBRHCD in (?ORG2_CD)" default="" />
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND U.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO LIKE '%?CED_NO%'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_YN'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='grade' value="AND G.GRADE = ?GRADE" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba070.getCountByUser.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>필수멘트 누락항목 결과 조회(상담사 기준)</description>
+		<result-name>oba.oba070.getCountByUser.sel</result-name>
+		<query><![CDATA[
+  			SELECT U.USER_ID, COUNT(U.TREATYDEPTCD) AS DEPT_CNT
+			FROM (SELECT DISTINCT M.CON_ENT_DGN_NO, USER_ID 
+				  FROM ms_stt_meta M LEFT OUTER JOIN ms_grade_sum G 
+				  ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+				  WHERE 1=1 
+				  AND M.CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+				  ?ced_no
+				  ?user_id
+				  ?anl_stat
+				  ?grade
+				  ?istp_cd
+				  ?prod_cd
+				  ) M
+				  ,ms_usermaster U
+			WHERE M.USER_ID = U.USER_ID
+			?org1_cd
+			?org2_cd
+			?org3_cd
+			?new_user_sql
+			GROUP BY U.USER_ID
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_cd' value="AND U.TREATYBRHCD in (?ORG2_CD)" default="" />
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='user_id' value="AND U.USER_ID in (?USER_ID)" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO LIKE '%?CED_NO%'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_YN'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='grade' value="AND G.GRADE = ?GRADE" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba070.getOmitMentDetailRes.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>특정 설계번호 조회 </description>
+		<result-name>oba.oba070.getOmitMentDetailRes.sel</result-name>
+		<query><![CDATA[
+  			SELECT M.USER_ID,M.USER_NAME,M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE,
+  				  ?sql1
+			FROM (SELECT MENT_CD, CON_ENT_DGN_NO, COUNT, USER_ID
+			       FROM ms_search_sum WHERE TYPE = 2) S
+			RIGHT JOIN
+				  (SELECT M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE,M.USER_ID, U.USER_NAME
+				   FROM ms_stt_meta M LEFT OUTER JOIN ms_grade_sum G ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO, ms_usermaster U 
+				   WHERE M.USER_ID = U.USER_ID 
+				   AND M.CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+				   ?ced_no
+				   ?anl_stat
+				   ?grade
+				   ?istp_cd
+				   ?prod_cd
+				   ) M
+			ON S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+			WHERE M.USER_ID = ?USER_ID
+			GROUP BY M.USER_ID, M.USER_NAME, M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE
+			ORDER BY M.CON_ENT_DGN_DATE DESC
+		]]></query>
+		<parameter name='org1_cd' value="AND U.TREATYHQCD = ?ORG1_CD" default="" />
+		<parameter name='org2_cd' value="AND U.TREATYBRHCD in (?ORG2_CD)" default="" />
+		<parameter name='org3_cd' value="AND U.TREATYDEPTCD = ?ORG3_CD" default="" />
+		<parameter name='ced_no' value="AND M.CON_ENT_DGN_NO LIKE '%?CED_NO%'" default="" />
+		<parameter name='anl_stat' value="AND M.GRD_FLAG = '?ANL_YN'" default="AND M.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='grade' value="AND G.GRADE = ?GRADE" default="" />
+		<parameter name='istp_cd' value="AND M.ISTP_CD = ?ISTP_CD" default="" />
+		<parameter name='prod_cd' value="AND M.PROD_CD = ?PROD_CD" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba060.getGradeResult.cnt.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>GRADE 분석결과</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+		SELECT count(*) totalcount FROM(
+				SELECT
+					D.CON_ENT_DGN_NO CED_NO,
+					CON_ENT_DGN_DATE CED_DATE,
+					ORG2_CD,
+					ORG2_NM,
+					ORG3_CD,
+					ORG3_NM,
+					C.USER_ID,
+					USER_NM+'('+C.USER_ID+')' USER_NM,
+					(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(CHG_GRADE,GRADE)) GRADE,
+					CONVERT(INT,GRADE_SUM) GRADE_SCORE,
+					CONVERT(INT,VRS_SCORE) VRS_SCORE,
+					CONVERT(INT,BAN_SCORE) BAN_SCORE,
+					CONVERT(INT,BEF_SCORE) BEF_SCORE,
+					CONVERT(INT,SEC_SCORE) SEC_SCORE,
+					CONVERT(INT,FOC_SCORE) FOC_SCORE,
+					CONVERT(INT,MEN_SCORE) MEN_SCORE,
+					WORK_MONTH,
+					ISNULL((select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = EC.USER_SCORE),'-') CNT_SCORE,
+					CASE WHEN CHG_GRADE IS NOT NULL THEN (select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = GRADE) ELSE '-' END BEF_GRADE,
+					ISNULL(CHG_COMMENT,'-') CHG_COMMENT
+			FROM 
+			(SELECT 
+				  DISTINCT
+				  CON_ENT_DGN_NO,
+				  CON_ENT_DGN_DATE,
+				  ORG1_CD,
+				  ORG1_NAME ORG1_NM,
+				  ORG2_CD,
+				  ORG2_NAME ORG2_NM,
+				  ORG3_CD,
+				  ORG3_NAME ORG3_NM,
+				  B.USER_ID,
+				  USER_NAME USER_NM,
+				  A.WORK_MONTH
+				FROM ms_stt_meta A inner join  VW_USERMASTER B on A.USER_ID = B.USER_ID
+				WHERE 1=1
+				 AND A.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE'
+				?org1_cd
+				?org2_flag
+				?org3_cd
+				?user_id
+				?new_user_id
+				?istp_cd
+				?prod_cd
+				?ced_no
+				?anl_stat
+			) C, ms_grade_sum D left outer join ms_grade_except EC on D.VERSION = EC.VERSION
+			WHERE C.CON_ENT_DGN_NO=D.CON_ENT_DGN_NO
+			?grade
+			) AA
+		]]></query>
+		<parameter name='org1_cd' value="AND B.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.ORG2_CD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND B.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND A.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(D.CHG_GRADE,D.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND A.GRD_FLAG = '?ANL_STAT'" default="AND A.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND B.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba060.getGradeResult.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>GRADE 분석결과</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT
+					D.CON_ENT_DGN_NO CED_NO,
+					CON_ENT_DGN_DATE CED_DATE,
+					ORG2_CD,
+					ORG2_NM,
+					ORG3_CD,
+					ORG3_NM,
+					C.USER_ID,
+					USER_NM+'('+C.USER_ID+')' USER_NM,
+					(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(CHG_GRADE,GRADE)) GRADE,
+					CONVERT(INT,GRADE_SUM) GRADE_SCORE,
+					CONVERT(INT,VRS_SCORE) VRS_SCORE,
+					CONVERT(INT,BAN_SCORE) BAN_SCORE,
+					CONVERT(INT,BEF_SCORE) BEF_SCORE,
+					CONVERT(INT,SEC_SCORE) SEC_SCORE,
+					CONVERT(INT,FOC_SCORE) FOC_SCORE,
+					CONVERT(INT,MEN_SCORE) MEN_SCORE,
+					WORK_MONTH,
+					ISNULL((select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = EC.USER_SCORE),'-') CNT_SCORE,
+					CASE WHEN CHG_GRADE IS NOT NULL THEN (select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = GRADE) ELSE '-' END BEF_GRADE,
+					ISNULL(CHG_COMMENT,'-') CHG_COMMENT
+			FROM 
+			(SELECT 
+				  DISTINCT
+				  CON_ENT_DGN_NO,
+				  CON_ENT_DGN_DATE,
+				  ORG1_CD,
+				  ORG1_NAME ORG1_NM,
+				  ORG2_CD,
+				  ORG2_NAME ORG2_NM,
+				  ORG3_CD,
+				  ORG3_NAME ORG3_NM,
+				  B.USER_ID,
+				  USER_NAME USER_NM,
+				  A.WORK_MONTH
+				FROM ms_stt_meta A inner join  VW_USERMASTER B on A.USER_ID = B.USER_ID
+				WHERE 1=1
+				 AND A.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE'
+				?org1_cd
+				?org2_flag
+				?org3_cd
+				?user_id
+				?new_user_id
+				?istp_cd
+				?prod_cd
+				?ced_no
+				?anl_stat
+			) C, ms_grade_sum D left outer join ms_grade_except EC on D.VERSION = EC.VERSION
+			WHERE C.CON_ENT_DGN_NO=D.CON_ENT_DGN_NO
+			?grade
+			ORDER BY CON_ENT_DGN_DATE DESC, D.CON_ENT_DGN_NO, ORG1_CD, ORG2_CD, ORG3_CD, USER_NM
+			OFFSET  CONVERT(INT,?_START) ROWS
+			FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND B.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.ORG2_CD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND B.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND A.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(D.CHG_GRADE,D.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND A.GRD_FLAG = '?ANL_STAT'" default="AND A.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND B.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+	<sql-service name='oba.oba060.getGradeResult.all.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>GRADE 분석결과</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT
+					D.CON_ENT_DGN_NO CED_NO,
+					CON_ENT_DGN_DATE CED_DATE,
+					ORG2_CD,
+					ORG2_NM,
+					ORG3_CD,
+					ORG3_NM,
+					C.USER_ID,
+					USER_NM+'('+C.USER_ID+')' USER_NM,
+					(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(CHG_GRADE,GRADE)) GRADE,
+					CONVERT(INT,GRADE_SUM) GRADE_SCORE,
+					CONVERT(INT,VRS_SCORE) VRS_SCORE,
+					CONVERT(INT,BAN_SCORE) BAN_SCORE,
+					CONVERT(INT,BEF_SCORE) BEF_SCORE,
+					CONVERT(INT,SEC_SCORE) SEC_SCORE,
+					CONVERT(INT,FOC_SCORE) FOC_SCORE,
+					CONVERT(INT,MEN_SCORE) MEN_SCORE,
+					WORK_MONTH,
+					ISNULL((select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = EC.USER_SCORE),'-') CNT_SCORE,
+					CASE WHEN CHG_GRADE IS NOT NULL THEN (select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = GRADE) ELSE '-' END BEF_GRADE,
+					ISNULL(CHG_COMMENT,'-') CHG_COMMENT
+			FROM 
+			(SELECT 
+				  DISTINCT
+				  CON_ENT_DGN_NO,
+				  CON_ENT_DGN_DATE,
+				  ORG1_CD,
+				  ORG1_NAME ORG1_NM,
+				  ORG2_CD,
+				  ORG2_NAME ORG2_NM,
+				  ORG3_CD,
+				  ORG3_NAME ORG3_NM,
+				  B.USER_ID,
+				  USER_NAME USER_NM,
+				  A.WORK_MONTH
+				FROM ms_stt_meta A inner join  VW_USERMASTER B on A.USER_ID = B.USER_ID
+				WHERE 1=1
+				 AND A.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE'
+				?org1_cd
+				?org2_flag
+				?org3_cd
+				?user_id
+				?new_user_id
+				?istp_cd
+				?prod_cd
+				?ced_no
+				?anl_stat
+			) C, ms_grade_sum D left outer join ms_grade_except EC on D.VERSION = EC.VERSION
+			WHERE C.CON_ENT_DGN_NO=D.CON_ENT_DGN_NO
+			?grade
+			ORDER BY CON_ENT_DGN_DATE DESC, D.CON_ENT_DGN_NO, ORG1_CD, ORG2_CD, ORG3_CD, USER_NM
+		]]></query>
+		<parameter name='org1_cd' value="AND B.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.ORG2_CD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND B.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND A.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+		<parameter name='grade' value="AND ISNULL(D.CHG_GRADE,D.GRADE) = '?GRADE'" default="" />
+		<parameter name='anl_stat' value="AND A.GRD_FLAG = '?ANL_STAT'" default="AND A.GRD_FLAG &lt;&gt; 'E'" />
+		<parameter name='new_user_id' value="AND B.WORK_MONTH &lt;= (SELECT ETC1 FROM ms_codebook where code_type='SYS103' and code_id != 00)" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba080.getMentResult.cnt.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>담보별 필수멘트 상단 그리드 쿼리</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+				SELECT COUNT(1) FROM (
+					SELECT 
+						 CON_ENT_DGN_NO CED_NO
+						 ,MAX(CON_ENT_DGN_DATE) CED_DATE
+						 ,MAX(ORG1_CD) ORG1_CD
+						,MAX(ORG2_CD) ORG2_CD
+						,MAX(ORG3_CD) ORG3_CD
+						,MAX(USER_ID) USER_ID
+						,MAX(USER_NAME) USER_NAME
+						,MAX(ISTP_CD) ISTP_CD
+						,MAX(ISTP_NM) ISTP_NM
+						,A.PROD_CD
+						,MAX(A.PROD_NM) PROD_NM
+						,MAX(DMBO_NM) DMBO_NM
+						 ,Items DMBO_CD
+						 ,COUNT(1) MNG_CNT
+						 ,(SELECT COUNT(DISTINCT MENT_CD) FROM ms_ment_score B WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO and A.PROD_CD=B.PROD_CD and A.Items=B.DMBO_CD) SCORE_CNT
+						FROM
+						(SELECT 
+								DISTINCT
+								A.CON_ENT_DGN_NO,
+								A.CON_ENT_DGN_DATE,
+								B.ORG1_CD,
+								B.ORG2_CD,
+								B.ORG3_CD,
+								B.USER_ID,
+								B.USER_NAME,
+								A.ISTP_CD,
+								A.ISTP_NM,
+								A.PROD_CD,
+								A.PROD_NM,
+								(SELECT DMBO_NM FROM MS_DMBO D WHERE D.PROD_CD = A.PROD_CD AND D.DMBO_CD = Items) DMBO_NM ,
+								Items 
+						FROM vw_usermaster B,ms_stt_meta A  outer apply  dbo.fn_split_string(DMBO_CD, ',')
+						WHERE A.USER_ID=B.USER_ID 
+						AND A.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE'
+						AND SRC_FLAG <> 'N' -- T OR Y
+								?org1_cd
+								?org2_flag
+								?org3_cd
+								?user_id
+								?istp_cd
+								?prod_cd
+								?dmbo_cd
+								?ced_no
+						) A, ms_ment_mng B
+						 WHERE A.PROD_CD = B.PROD_CD AND A.Items = B.DMBO_CD
+						 GROUP BY CON_ENT_DGN_NO,A.PROD_CD,Items
+						  ) AA
+		]]></query>
+		<parameter name='org1_cd' value="AND B.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.ORG2_CD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND B.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND B.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='dmbo_cd' value="AND A.DMBO_CD = '?DMBO_CD'" default="" />
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba080.getMentResult.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>담보별 필수멘트 상단 그리드 쿼리</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT AA.*
+						,CONCAT(SCORE_CNT,'/',MNG_CNT) MENT_CNT
+						,CASE WHEN MNG_CNT = SCORE_CNT THEN 'Y' ELSE 'N' END MENT_YN FROM (
+					SELECT 
+						 CON_ENT_DGN_NO CED_NO
+						 ,MAX(CON_ENT_DGN_DATE) CED_DATE
+						 ,MAX(ORG1_CD) ORG1_CD
+						,MAX(ORG2_CD) ORG2_CD
+						,MAX(ORG3_CD) ORG3_CD
+						,MAX(USER_ID) USER_ID
+						,MAX(USER_NAME) USER_NAME
+						,MAX(ISTP_CD) ISTP_CD
+						,MAX(ISTP_NM) ISTP_NM
+						,A.PROD_CD
+						,MAX(A.PROD_NM) PROD_NM
+						,MAX(DMBO_NM) DMBO_NM
+						 ,Items DMBO_CD
+						 ,COUNT(1) MNG_CNT
+						 ,(SELECT COUNT(DISTINCT MENT_CD) FROM ms_ment_score B WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO and A.PROD_CD=B.PROD_CD and A.Items=B.DMBO_CD) SCORE_CNT
+						FROM
+						(SELECT 
+								DISTINCT
+								A.CON_ENT_DGN_NO,
+								A.CON_ENT_DGN_DATE,
+								B.ORG1_CD,
+								B.ORG2_CD,
+								B.ORG3_CD,
+								B.USER_ID,
+								B.USER_NAME+'('+B.USER_ID+')' USER_NAME,
+								A.ISTP_CD,
+								A.ISTP_NM,
+								A.PROD_CD,
+								A.PROD_NM,
+								(SELECT DMBO_NM FROM MS_DMBO D WHERE D.PROD_CD = A.PROD_CD AND D.DMBO_CD = Items) DMBO_NM ,
+								Items 
+						FROM vw_usermaster B,ms_stt_meta A  outer apply  dbo.fn_split_string(DMBO_CD, ',')
+						WHERE A.USER_ID=B.USER_ID
+						AND A.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE' 
+						AND SRC_FLAG <> 'N' -- T OR Y
+								?org1_cd
+								?org2_flag
+								?org3_cd
+								?user_id
+								?istp_cd
+								?prod_cd
+								?dmbo_cd
+								?ced_no
+						) A, ms_ment_mng B
+						 WHERE A.PROD_CD = B.PROD_CD AND A.Items = B.DMBO_CD
+						 GROUP BY CON_ENT_DGN_NO,A.PROD_CD,Items
+						  ) AA
+						  ORDER BY CED_DATE DESC
+						OFFSET  CONVERT(INT,?_START) ROWS
+			 			FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+		<parameter name='org1_cd' value="AND B.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.ORG2_CD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND B.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND B.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='dmbo_cd' value="AND A.DMBO_CD = '?DMBO_CD'" default="" />
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba080.getMentResult.all.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>담보별 필수멘트 상단 그리드 쿼리</description>
+		<result-name>DS_EXCEL</result-name>
+		<query><![CDATA[
+				SELECT AA.*
+						,CONCAT(SCORE_CNT,'/',MNG_CNT) MENT_CNT
+						,CASE WHEN MNG_CNT = SCORE_CNT THEN 'Y' ELSE 'N' END MENT_YN FROM (
+					SELECT 
+						 CON_ENT_DGN_NO CED_NO
+						 ,MAX(CON_ENT_DGN_DATE) CED_DATE
+						 ,MAX(ORG1_CD) ORG1_CD
+						,MAX(ORG2_CD) ORG2_CD
+						,MAX(ORG3_CD) ORG3_CD
+						,MAX(USER_ID) USER_ID
+						,MAX(USER_NAME) USER_NAME
+						,MAX(ISTP_CD) ISTP_CD
+						,MAX(ISTP_NM) ISTP_NM
+						,A.PROD_CD
+						,MAX(A.PROD_NM) PROD_NM
+						,MAX(DMBO_NM) DMBO_NM
+						 ,Items DMBO_CD
+						 ,COUNT(1) MNG_CNT
+						 ,(SELECT COUNT(DISTINCT MENT_CD) FROM ms_ment_score B WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO and A.PROD_CD=B.PROD_CD and A.Items=B.DMBO_CD) SCORE_CNT
+						FROM
+						(SELECT 
+								DISTINCT
+								A.CON_ENT_DGN_NO,
+								A.CON_ENT_DGN_DATE,
+								B.ORG1_CD,
+								B.ORG2_CD,
+								B.ORG3_CD,
+								B.USER_ID,
+								B.USER_NAME+'('+B.USER_ID+')' USER_NAME,
+								A.ISTP_CD,
+								A.ISTP_NM,
+								A.PROD_CD,
+								A.PROD_NM,
+								(SELECT DMBO_NM FROM MS_DMBO D WHERE D.PROD_CD = A.PROD_CD AND D.DMBO_CD = Items) DMBO_NM ,
+								Items 
+						FROM vw_usermaster B,ms_stt_meta A  outer apply  dbo.fn_split_string(DMBO_CD, ',')
+						WHERE A.USER_ID=B.USER_ID
+						AND A.CON_ENT_DGN_DATE BETWEEN '?SDATE' AND '?EDATE'
+						AND SRC_FLAG <> 'N' -- T OR Y
+								?org1_cd
+								?org2_flag
+								?org3_cd
+								?user_id
+								?istp_cd
+								?prod_cd
+								?dmbo_cd
+								?ced_no
+						 ) A, ms_ment_mng B
+						 WHERE A.PROD_CD = B.PROD_CD AND A.Items = B.DMBO_CD
+						 GROUP BY CON_ENT_DGN_NO,A.PROD_CD,Items
+					  ) AA
+					  ORDER BY CED_DATE DESC
+		]]></query>
+		<parameter name='org1_cd' value="AND B.ORG1_CD = '?ORG1_CD'" default="" />
+		<parameter name='org2_flag' value="" default="" >
+			<condition key="M" value="AND B.ORG2_CD IN (SELECT CODE_ID FROM MS_CODEBOOK WHERE CODE_TYPE = 'SYS002' AND CODE_ID NOT IN  ('KB00','00') AND USE_YN = 'Y')"/>
+			<condition key="O" value="AND B.ORG2_CD = '?ORG2_CD'"/>
+			<condition key="A" value=""/>
+		</parameter> 
+		<parameter name='org3_cd' value="AND B.ORG3_CD = '?ORG3_CD'" default="" />
+		<parameter name='user_id' value="AND B.USER_ID in (?USER_ID)" default="" />
+		<parameter name='istp_cd' value="AND A.ISTP_CD = '?ISTP_CD'" default="" />
+		<parameter name='prod_cd' value="AND A.PROD_CD = '?PROD_CD'" default="" />
+		<parameter name='dmbo_cd' value="AND A.DMBO_CD = '?DMBO_CD'" default="" />
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO like CONCAT(?CED_NO,'%')" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba080.getMentDetail.cnt.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>담보별 필수멘트 하단 그리드 쿼리</description>
+		<result-name>DS_CNT_LIST</result-name>
+		<query><![CDATA[
+				SELECT
+					COUNT(A.MENT_CD) CNT
+			FROM MS_MENT_MNG A 
+			LEFT OUTER JOIN (
+			SELECT 
+					B.*
+					,A.START_TIME
+					,A.STT_SENT_ID
+					,A.STT_SENT
+					,A.PROD_CD
+					,A.DMBO_CD
+					,A.MENT_CD 
+			FROM 
+				(select A.UCID
+						,CON_ENT_DGN_NO
+						,A.START_TIME
+						,A.STT_SENT_ID
+						,STT_SENT
+						,PROD_CD
+						,DMBO_CD
+						,MENT_CD
+				from ms_ment_score A, ms_stt_rslt B
+				where A.UCID=B.UCID
+				and A.START_TIME=B.START_TIME
+				AND A.PROD_CD=?PROD_CD
+				AND A.DMBO_CD=?DMBO_CD
+				) A, 
+				(SELECT 
+					  DISTINCT
+					  UCID,
+					  CON_ENT_DGN_NO,
+					  CON_ENT_DGN_DATE
+				--	  ORG1_CD,
+				--	  ORG1_NAME ORG1_NM,
+				--	  ORG2_CD,
+				--	  ORG2_NAME ORG2_NM,
+				--	  ORG3_CD,
+				--	  ORG3_NAME ORG3_NM,
+				--	  B.USER_ID,
+				--	  USER_NAME USER_NM
+					FROM ms_stt_meta A,  VW_USERMASTER B 
+					WHERE A.USER_ID = B.USER_ID
+					AND CON_ENT_DGN_NO=?CED_NO
+					AND CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+					AND SRC_FLAG <> 'N' -- T OR Y
+					AND A.ISTP_CD = ?ISTP_CD
+					AND A.PROD_CD=?PROD_CD
+					AND B.ORG1_CD = ?ORG1_CD
+					AND B.ORG2_CD = ?ORG2_CD
+					AND B.ORG3_CD = ?ORG3_CD
+					AND B.USER_ID = ?USER_ID
+				) B
+			WHERE A.UCID= B.UCID
+			AND A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			) B ON A.PROD_CD = B.PROD_CD AND A.DMBO_CD = B.DMBO_CD AND A.MENT_CD = B.MENT_CD
+			WHERE 1=1
+			AND A.PROD_CD=?PROD_CD
+			AND A.DMBO_CD=?DMBO_CD
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba080.getMentDetail.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>담보별 필수멘트 하단 그리드 쿼리</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				
+			SELECT
+					CON_ENT_DGN_NO CED_NO
+					-- A.PROD_CD
+					,A.DMBO_CD
+					,ISNULL((SELECT ENC_FLAG FROM ms_stt_rslt_merge Z WHERE B.UCID=Z.UCID),'Z') AS ENC_FLAG --Z면 STT가 없는거
+					,(SELECT DMBO_NM FROM ms_dmbo D WHERE A.PROD_CD = D.PROD_CD AND A.DMBO_CD=D.DMBO_CD) AS DMBO_NM
+					,A.MENT_CD
+					,CONCAT(A.MENT_SENT,' {',A.MENT_KEYWORD,'}') MNG_MENT
+					,START_TIME
+					,UCID_DATE
+					,STT_SENT STT_MENT
+					,CASE WHEN CON_ENT_DGN_NO IS NULL THEN 'N' ELSE 'Y' END MENT_YN
+			FROM MS_MENT_MNG A 
+			LEFT OUTER JOIN (
+			SELECT 
+					B.*
+					,A.START_TIME
+					,A.STT_SENT_ID
+					,A.STT_SENT
+					,A.PROD_CD
+					,A.DMBO_CD
+					,A.MENT_CD 
+			FROM 
+				(select A.UCID
+						,CON_ENT_DGN_NO
+						,A.START_TIME
+						,A.STT_SENT_ID
+						,STT_SENT
+						,PROD_CD
+						,DMBO_CD
+						,MENT_CD
+				from ms_ment_score A, ms_stt_rslt B
+				where A.UCID=B.UCID
+				and A.START_TIME=B.START_TIME
+				AND A.PROD_CD=?PROD_CD
+				AND A.DMBO_CD=?DMBO_CD
+				) A, 
+				(SELECT 
+					  DISTINCT
+					  UCID,
+					  UCID_DATE,
+					  CON_ENT_DGN_NO,
+					  CON_ENT_DGN_DATE
+				--	  ORG1_CD,
+				--	  ORG1_NAME ORG1_NM,
+				--	  ORG2_CD,
+				--	  ORG2_NAME ORG2_NM,
+				--	  ORG3_CD,
+				--	  ORG3_NAME ORG3_NM,
+				--	  B.USER_ID,
+				--	  USER_NAME USER_NM
+					FROM ms_stt_meta A,  VW_USERMASTER B 
+					WHERE A.USER_ID = B.USER_ID
+					AND CON_ENT_DGN_NO=?CED_NO
+					AND CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+					AND SRC_FLAG <> 'N' -- T OR Y
+					AND A.ISTP_CD = ?ISTP_CD
+					AND A.PROD_CD=?PROD_CD
+					AND B.ORG1_CD = ?ORG1_CD
+					AND B.ORG2_CD = ?ORG2_CD
+					AND B.ORG3_CD = ?ORG3_CD
+					AND B.USER_ID = ?USER_ID
+				) B
+			WHERE A.UCID= B.UCID
+			AND A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			) B ON A.PROD_CD = B.PROD_CD AND A.DMBO_CD = B.DMBO_CD AND A.MENT_CD = B.MENT_CD
+			WHERE 1=1
+			AND A.PROD_CD=?PROD_CD
+			AND A.DMBO_CD=?DMBO_CD
+			ORDER BY A.MENT_CD ASC,CON_ENT_DGN_DATE DESC, STT_SENT_ID ASC
+			OFFSET  CONVERT(INT,?_START) ROWS
+ 			FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba080.getMentDetail.all.sel'  datasource="is_stat" paging="false" type="prepared">
+		<description>담보별 필수멘트 하단 그리드 쿼리</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+			SELECT
+					CON_ENT_DGN_NO
+					-- A.PROD_CD
+					,A.DMBO_CD
+					--,(SELECT DMBO_NM FROM ms_dmbo D WHERE A.PROD_CD = D.PROD_CD AND A.DMBO_CD=D.DMBO_CD) AS DMBO_NM
+					,A.MENT_CD
+					,A.MENT_SENT
+					,START_TIME
+					,STT_SENT
+					,CASE WHEN CON_ENT_DGN_NO IS NULL THEN 'N' ELSE 'Y' END MENT_YN
+			FROM MS_MENT_MNG A 
+			LEFT OUTER JOIN (
+			SELECT 
+					B.*
+					,A.START_TIME
+					,A.STT_SENT_ID
+					,A.STT_SENT
+					,A.PROD_CD
+					,A.DMBO_CD
+					,A.MENT_CD 
+			FROM 
+				(select A.UCID
+						,CON_ENT_DGN_NO
+						,A.START_TIME
+						,STT_SENT_ID
+						,STT_SENT
+						,PROD_CD
+						,DMBO_CD
+						,MENT_CD
+				from ms_ment_score A, ms_stt_rslt B
+				where A.UCID=B.UCID
+				and A.START_TIME=B.START_TIME
+				AND A.PROD_CD=?PROD_CD
+				AND A.DMBO_CD=?DMBO_CD
+				) A, 
+				(SELECT 
+					  DISTINCT
+					  UCID,
+					  CON_ENT_DGN_NO,
+					  CON_ENT_DGN_DATE
+				--	  ORG1_CD,
+				--	  ORG1_NAME ORG1_NM,
+				--	  ORG2_CD,
+				--	  ORG2_NAME ORG2_NM,
+				--	  ORG3_CD,
+				--	  ORG3_NAME ORG3_NM,
+				--	  B.USER_ID,
+				--	  USER_NAME USER_NM
+					FROM ms_stt_meta A,  VW_USERMASTER B 
+					WHERE A.USER_ID = B.USER_ID
+					AND CON_ENT_DGN_NO=?CED_NO
+					AND CON_ENT_DGN_DATE BETWEEN ?SDATE AND ?EDATE
+					AND SRC_FLAG <> 'N' -- T OR Y
+					AND A.ISTP_CD = ?ISTP_CD
+					AND A.PROD_CD=?PROD_CD
+					AND B.ORG1_CD = ?ORG1_CD
+					AND B.ORG2_CD = ?ORG2_CD
+					AND B.ORG3_CD = ?ORG3_CD
+					AND B.USER_ID = ?USER_ID
+				) B
+			WHERE A.UCID= B.UCID
+			AND A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO
+			) B ON A.PROD_CD = B.PROD_CD AND A.DMBO_CD = B.DMBO_CD AND A.MENT_CD = B.MENT_CD
+			WHERE 1=1
+			AND A.PROD_CD=?PROD_CD
+			AND A.DMBO_CD=?DMBO_CD
+			ORDER BY A.MENT_CD ASC,CON_ENT_DGN_DATE DESC, STT_SENT_ID ASC
+		]]></query>
+	</sql-service>
+	
+<sql-service name='oba.oba010t1t1.getInsuPlan.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>상세정보</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+		SELECT 	A.TM_NO                     -- TM 설계번호
+                       ,A.CON_ENT_DGN_NO            --가입 설계번호
+                       ,A.CON_P_CONT_NAME        	--계약자
+			           ,PLS_DECRYPT_B64(A.CON_P_PSN_NO)  CON_P_PSN_NO  --계약자주민
+                       , CASE WHEN A.CON_P_CALL_SITE_GB = '01' THEN A.CON_P_HOME_ADDR_1
+			                  WHEN A.CON_P_CALL_SITE_GB = '02' THEN A.CON_P_OFF_ADDR_1
+			                  ELSE ''
+			             END                                            AS CON_P_ADDR_1              -- 계약자 주소1                
+                     ,CASE WHEN A.CON_P_CALL_SITE_GB = '01' THEN PLS_DECRYPT_B64(A.CON_P_HOME_ADDR_2)
+			                  WHEN A.CON_P_CALL_SITE_GB = '02' THEN PLS_DECRYPT_B64(A.CON_P_OFF_ADDR_2)
+			                  ELSE ''
+			             END AS CON_P_ADDR_2              -- 계약자 주소2
+                       , A.CON_P_HOME_TEL_DDD || A.CON_P_HOME_TEL1 || PLS_DECRYPT_B64(A.CON_P_HOME_TEL2)  CON_P_HOME_TEL -- 계약자 자택 전화번호
+                       , A.CON_P_HP_DDD || A.CON_P_HP1 || PLS_DECRYPT_B64(A.CON_P_HP2) CON_P_HP -- 계약자 휴대번호
+    		           , A.CON_P_OFF_TEL_DDD || A.CON_P_OFF_TEL1 || PLS_DECRYPT_B64(A.CON_P_OFF_TEL2) CON_P_OFF_TEL -- 계약자 직장번호
+			           , A.CON_P_ETC_TEL_DDD || A.CON_P_ETC_TEL1 || PLS_DECRYPT_B64(A.CON_P_ETC_TEL2) CON_P_ETC_TEL -- 계약자 기타번호
+                     /**피보험자*/
+                     ,B.CON_IP_ISD_NAME CON_IP_ISD_NAME --피보험자명
+                     ,PLS_DECRYPT_B64(B.CON_IP_ISD_CD) CON_IP_PSN_NO -- 피보험자 주민번호
+                     ,CASE WHEN B.CON_IP_CALL_SITE_GB = '01' THEN B.CON_IP_ADDR_1
+		                WHEN B.CON_IP_CALL_SITE_GB = '02' THEN B.CON_IP_OFF_ADDR_1
+		                ELSE ''
+		            END                                     AS CON_IP_ADDR_1              -- 피보험자 주소1
+		          ,CASE WHEN B.CON_IP_CALL_SITE_GB = '01' THEN PLS_DECRYPT_B64(CON_IP_ADDR_2)
+		                WHEN B.CON_IP_CALL_SITE_GB = '02' THEN PLS_DECRYPT_B64(CON_IP_OFF_ADDR_2)
+		                ELSE ''
+		            END                                     AS CON_IP_ADDR_2              -- 피보험자 주소2
+				  ,B.CON_IP_TEL_DDD || B.CON_IP_TEL_NO1 ||  PLS_DECRYPT_B64(B.CON_IP_TEL_NO2) CON_IP_TEL --피보험자 자택전화번호
+                  ,B.CON_IP_HP_DDD || B.CON_IP_HP1 || PLS_DECRYPT_B64(B.CON_IP_HP2) CON_IP_HP --피보험자 휴대번호
+				  ,B.CON_IP_OFF_TEL_DDD || B.CON_IP_OFF_TEL1 || PLS_DECRYPT_B64(B.CON_IP_OFF_TEL2) CON_IP_OFF_TEL --피보험자 직장전화번호
+				  ,B.CON_IP_ETC_TEL_DDD || B.CON_IP_ETC_TEL1 || PLS_DECRYPT_B64(B.CON_IP_ETC_TEL2) CON_IP_ETC_TEL --피보험자 기타번호
+                 
+                  /**납입자*/
+                  ,A.CON_CON_OLT_DEPOSIT_NM -- 납입자
+                  ,A.CON_CON_OLT_JM_ID --납입자 생년월일
+                  ,A.CON_CON_OLT_TRANS_APNT_DD --이체지정일
+                  ,A.CON_FST_OLT_BANK_NM -- 초회 카드
+                  ,PLS_DECRYPT_B64(A.CON_FST_OLT_B_ACNT_NO) CON_FST_OLT_B_ACNT_NO -- 초회 카드번호
+                  ,A.CON_FST_OLT_BANK_BRH_CD --유효기간
+                  ,A.CON_CON_OLT_BANK_NM --자동이체
+                  ,PLS_DECRYPT_B64(A.CON_CON_OLT_B_ACNT_NO) CON_CON_OLT_B_ACNT_NO --자동이체 카드번호
+                  ,A.CON_APP_DATE
+                  ,DECODE(A.CON_FST_CASH_MTH,'02','카드','03','자동이체','') CON_FST_CASH_MTH --초회
+                  ,DECODE(A.CON_CASH_MTH,'02','카드','03','자동이체','') CON_CASH_MTH  -- 계속
+				  ,A.CON_CON_OLT_BANK_BRH_CD --자동이체 유효기간
+				  ,PLS_DECRYPT_B64(CON_P_E_MAIL) CON_P_E_MAIL -- 계약자 이메일
+				  ,PLS_DECRYPT_B64(CON_IP_EMAIL) CON_IP_EMAIL -- 피보험자 이메일
+				  ,TSOWN.FN_CODEBOOK('CMP017', CON_CON_OLT_RELATION_CD) CON_OLT_REL -- 계약자관계
+                FROM TSOWN.TB_INSU_PLAN_MAST A
+                    ,TSOWN.TB_INSU_PLAN_DETAIL B
+                WHERE A.TM_NO           = B.TM_NO
+              --  AND   A.CON_ENT_DGN_NO  = '941807863720'
+                ?ced_no
+		]]></query>
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO = '?CED_NO'" default="" />
+	</sql-service>
+		
+		
+	<sql-service name='oba.oba010t1t1.isMaskYn.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>마스크여부</description>
+		<result-name>DS_MASK</result-name>
+		<query><![CDATA[
+				SELECT  
+				
+						--CASE WHEN (TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD') - TO_DATE(CON_APP_DATE,'YYYYMMDD') < 14)
+								  -- AND (A.CON_POL_NO IS NOT NULL )
+                        --THEN 'Y'
+                      --  ELSE 'N'  END MASKING
+                        CASE WHEN TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD') < TO_DATE(CON_APP_DATE,'YYYYMMDD')+14
+                        THEN 'Y'
+                        ELSE 'N' END QM_YN
+                        ,A.CON_POL_NO
+                        ,A.CON_APP_DATE
+                        ,(SELECT USERGROUPCD FROM TSOWN.TB_USER WHERE USERID =?USER_ID) USERGROUPCD
+                FROM TSOWN.TB_INSU_PLAN_MAST A
+                WHERE 1=1
+                --AND A.CON_ENT_DGN_NO  = '941807491779'
+                ?ced_no
+		]]></query>
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO = '?CED_NO'" default="" />
+		</sql-service>
+		
+	<sql-service name='oba.oba010t1t1.getGradeInfo.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>분석정보</description>
+		<result-name>DS_GRADE_INFO</result-name>
+		<query><![CDATA[
+				SELECT
+				DURATION DURATION,
+				CALL_CNT,
+				A.CON_ENT_DGN_NO,
+				ISNULL( (select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(CHG_GRADE,GRADE)),'') +'('+RTRIM(ISNULL(CONVERT(varchar,ROUND(GRADE_SUM,0,0)),'0'))+')'   FIN_GRADE, --최종그레이드
+				--(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id =ISNULL(CHG_GRADE,GRADE)) +'('+ISNULL(CONVERT(INT,ROUND(GRADE_SUM,0,0)),0)+')'   FIN_GRADE, --최종그레이드
+				VERSION GRADE_VERSION,
+				ISNULL(CONVERT(INT,ROUND(GRADE_SUM,0,0)),0) GRADE_SCORE,-- 점수
+				ISNULL(CONVERT(INT,ROUND(VRS_SCORE,0,0)),0) VRS_SCORE,
+				ISNULL(CONVERT(INT,ROUND(BAN_SCORE,0,0)),0) BAN_SCORE,
+				ISNULL(CONVERT(INT,ROUND(BEF_SCORE,0,0)),0) BEF_SCORE, --최종 grade
+				ISNULL(CONVERT(INT,ROUND(SEC_SCORE,0,0)),0) SEC_SCORE,
+				ISNULL(CONVERT(INT,ROUND(FOC_SCORE,0,0)),0) FOC_SCORE,
+				ISNULL(CONVERT(INT,ROUND(MEN_SCORE,0,0)),0) MEN_SCORE,
+				-- CASE WHEN CHG_GRADE IS NOT NULL THEN (select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = GRADE) ELSE '' END BEF_GRADE,
+				ISNULL(CHG_COMMENT,'') CHG_COMMENT,
+				(select CODE_NAME from ms_codebook where code_type='VSS160' and code_id = GRADE) BEF_GRADE, --변경전그레이드
+				GRD_FLAG,
+				REASON
+			FROM
+				(
+				 SELECT
+						CON_ENT_DGN_NO,
+						COUNT(Z.UCID) CALL_CNT,
+						MAX(USER_ID) USER_ID,
+						MAX(ISTP_CD) ISTP_CD,
+						MAX(ISTP_NM) ISTP_NM,
+						MAX(PROD_CD) PROD_CD,
+						MAX(PROD_NM) PROD_NM,
+						MAX(CON_P_CONT_NAME) CUST_NM,
+						MAX(CON_ENT_DGN_DATE) CON_ENT_DGN_DATE,
+						MAX(CON_CON_MONTH_PREM) MONTH_PREM,
+						MAX(CON_CON_OLT_DEPOSIT_NM) NAB_NAME,
+						MAX(CON_IP_ISD_NAME) P_NAME,
+						MAX(DMBO_CD) DMBO_CD,
+						MAX(INSUR_AMT) INSUR_AMT,
+						MAX(BASIC_PREM) BASIC_PREM,
+						SUM(Y.DURATION) DURATION,
+						MAX(ASS_FLAG) ASS_FLAG,
+						MAX(GRD_FLAG) GRD_FLAG,
+						(CASE WHEN MIN(TA_FLAG) ='E' THEN '데이터가 없습니다.(TA)' WHEN MIN(SRC_FLAG)='E' THEN '오류가 발생했습니다.(검색)' WHEN MIN(TA_FLAG) <> 'E' AND MIN(SRC_FLAG) <> 'E' AND MAX(GRD_FLAG) ='E' THEN '오류가 발생했습니다. (등급부여)' END ) REASON
+				 FROM ms_stt_meta Z , ms_stt_rslt_merge Y
+				 WHERE Z.UCID=Y.UCID
+				-- AND Z.GRD_FLAG <> 'E'
+				 GROUP BY CON_ENT_DGN_NO) A LEFT OUTER JOIN ms_grade_sum B on A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO, ms_usermaster C 
+				WHERE C.USER_ID=A.USER_ID
+                ?ced_no
+		]]></query>
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO = '?CED_NO'" default="" />
+	</sql-service>	
+	
+	
+	<sql-service name='oba.oba010t1t4.getCustId.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>분석정보</description>
+		<result-name>DS_CUST</result-name>
+		<query><![CDATA[
+				SELECT  B.CON_IP_ISD_CD CON_IP_PSN_NO --피보험자 주민번호
+						,PLS_DECRYPT_B64(B.CON_IP_ISD_CD) CON_IP_PSN_NO_MASK 
+						,B.CON_IP_ISD_NAME  -- 피보험자 명
+                FROM TSOWN.TB_INSU_PLAN_MAST A
+                	,TSOWN.TB_INSU_PLAN_DETAIL B
+                WHERE A.TM_NO           = B.TM_NO
+                --AND A.CON_ENT_DGN_NO  = '941807491779'
+                ?ced_no
+		]]></query>
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO = '?CED_NO'" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t4.getMrHist.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>의료비 조회</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT CUSTID
+						,OFFICE_NM --회사명
+						,SUBSTR(INSU_ST_DT,0,8)  INSU_ST_DT --보험개시일자
+						,SUBSTR(INSU_ST_DT,9,8)  INSU_ED_DT --보험종료일자
+						,DMBO_NM -- 담보명
+						,DMBO_AMT -- 담보 가입금액
+						,CON_STATE -- 계약상태
+						,PROD_NM -- 상품명
+						,INQ_BAS_DT -- 조회일사
+				 FROM TSOWN.TB_MR_LS_HIST
+				 WHERE 1=1 -- AND CUSTID = '1NDvet4WDPj9g9xfqqJMgQAA==AA0A' /* 주민등록번호 */
+				   AND MR_LS_ST = 'M'  /* M:실손, L:정액 */
+                 ?cust_id
+		]]></query>
+		<parameter name='cust_id' value="AND CUSTID = '?CUST_ID'" default="" />
+	</sql-service>	
+	
+	<sql-service name='oba.oba010t1t5.getLsHist.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>정액담보 조회</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT CUSTID	--암호화주민등록번호
+						,IP_CONT_NAME  --피보험자명
+						,INQ_NO  --조회건수
+						,DMBO_NO  --담보건수
+						,SUBSTR(INSU_ST_DT,0,8)  INSU_ST_DT --보험개시일자
+						,SUBSTR(INSU_ST_DT,9,8)  INSU_ED_DT --보험종료일자
+						,DMBO_NM   --담보명
+						,DMBO_AMT   --담보가입금액
+						,CON_STATE  --계약상태
+						,DMBO_SP_CD  --담보특성코드
+						,LFIN_ENTR_NCS  --생보가입건수
+						,LFIN_SMSU  --생보가입금액
+						,DDC_ENTR_NCS  --공제가입건수
+						,DDC_SMSU  --공제가입금액
+						,NLIS_ENTR_NCS  --손보가입건수
+						,NLIS_SMSU   --손보가입금액
+						,PROD_NM --상품명
+						,INQ_BAS_DT -- 조회일시
+				FROM TSOWN.TB_MR_LS_HIST
+				WHERE 1=1 -- and  CUSTID = 'Gkkofa2E87ZT4RK7++cN2wAA==AA0A'  /* 주민등록번호 */
+				AND MR_LS_ST = 'L'  /* M:실손, L:정액 */
+				?cust_id
+		]]></query>
+		<parameter name='cust_id' value="AND CUSTID = '?CUST_ID'" default="" />
+	</sql-service>	
+	
+	<sql-service name='oba.oba010t1t6.getInsuPlanPaAuth.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>친권자정보</description>
+		<result-name>DS_LIST</result-name>
+		<query><![CDATA[
+				SELECT   TM_NO	--TM설계번호
+						,CON_IP_INS_AIM_SEQ   --Q피보험목적순번
+						,CON_IP_PSN_NO      --암호화피보험자주민등록번호
+						,CON_FAMAILY_GB     --친권자대리인구분
+					--	,TSOWN.FN_CODEBOOK('CMP017',CON_PA1_GB) CON_PA1_GB --친권자1 지정구분
+						,CON_PA1_GB
+						,PLS_DECRYPT_B64(CON_PA1_PSN_NO) CON_PA1_PSN_NO	    --암호화친권자1 주민번호
+						,CON_PA1_NAME		    --친권자1 성명
+						,CON_PA1_CUST_ID		--친권자1 고객ID
+						,CON_PA1_HOME_TEL_DDD || CON_PA1_HOME_TEL1 || PLS_DECRYPT_B64(CON_PA1_HOME_TEL2)  CON_PA1_HOME_TEL--친권자1 자택전화지역번호
+						,CON_PA1_OFF_TEL_DDD ||CON_PA1_OFF_TEL1|| PLS_DECRYPT_B64(CON_PA1_OFF_TEL2) CON_PA1_OFF_TEL --친권자1 직장전화지역번호
+						,CON_PA1_ETC_TEL_DDD || CON_PA1_ETC_TEL1 || PLS_DECRYPT_B64(CON_PA1_ETC_TEL1) CON_PA1_ETC_TEL --친권자1 기타전화지역번호
+						,CON_PA1_HP_DDD	|| CON_PA1_HP_NO1 || PLS_DECRYPT_B64(CON_PA1_HP_NO2) CON_PA1_HP_NO	--친권자1 핸드폰사업자번호
+						,CON_PA1_FAX		--친권자1 팩스번호
+						,CON_PA1_E_MAIL		--친권자1 이메일주소
+						,CON_PA1_CALL_SITE_GB		--친권자1 주소구분
+						,CON_PA1_ADDR_GB		--친권자1 신구주소구분코드
+						,CON_PA1_ADDR_PTCD		--친권자1 주소유형코드
+						,CON_PA1_ADDR_1		--친권자1 주소1
+						,PLS_DECRYPT_B64(CON_PA1_ADDR_2) CON_PA1_ADDR_2		--친권자1 주소2
+						--,TSOWN.FN_CODEBOOK('CMP017',CON_PA2_GB) CON_PA2_GB --친권자2 지정구분
+						,CON_PA2_GB
+						,PLS_DECRYPT_B64(CON_PA2_PSN_NO)	CON_PA2_PSN_NO	--암호화친권자2 주민번호
+						,CON_PA2_NAME		--친권자2 성명
+						,CON_PA2_CUST_ID		--친권자2 고객ID
+						,CON_PA2_HOME_TEL_DDD || CON_PA2_HOME_TEL1 || PLS_DECRYPT_B64(CON_PA2_HOME_TEL2) CON_PA2_HOME_TEL	--친권자2 자택전화지역번호
+						,CON_PA2_OFF_TEL_DDD || CON_PA2_OFF_TEL1 || PLS_DECRYPT_B64(CON_PA2_OFF_TEL2)	CON_PA2_OFF_TEL	--친권자2 직장전화지역번호
+						,CON_PA2_ETC_TEL_DDD || CON_PA2_ETC_TEL1 || PLS_DECRYPT_B64(CON_PA2_ETC_TEL2) CON_PA2_ETC_TEL --친권자2 기타전화지역번호
+						,CON_PA2_HP_DDD || CON_PA2_HP_NO1 || PLS_DECRYPT_B64(CON_PA2_HP_NO2)	CON_PA2_HP_NO	--친권자2 핸드폰사업자번호
+						,CON_PA2_FAX		--친권자2 팩스번호
+						,CON_PA2_E_MAIL		--친권자2 이메일주소
+						,CON_PA2_CALL_SITE_GB		--친권자2 주소구분
+						,CON_PA2_ADDR_GB		--친권자2 신구주소구분코드
+						,CON_PA2_ADDR_PTCD		--친권자2 주소유형코드
+						,CON_PA2_ZIP		--친권자2 우편번호
+						,CON_PA2_ADDR_1		--친권자2 주소1
+						,PLS_DECRYPT_B64(CON_PA2_ADDR_2)	CON_PA2_ADDR_2	--친권자2 주소2
+						,CON_PA1_ZIP		--친권자1 우편번호
+						,CON_PA1_FOREIGN_NAME		--친권자1 외국인명
+						,CON_PA1_NATIONALITY		--친권자1 국적
+						,CON_PA2_FOREIGN_NAME	--친권자2 외국인명
+						,CON_PA2_NATIONALITY		--친권자2 국적
+			  FROM TSOWN.TB_INSU_PLAN_PA_AUTH       
+			 /* TM_NO를 모르고 가입설계번호를 알고 있을 경우*/
+			 WHERE TM_NO IN (SELECT TM_NO FROM TSOWN.TB_INSU_PLAN_MAST WHERE CON_ENT_DGN_NO = '?CED_NO') --'941806041114' ) --'941705911893') 
+			  /*AND CON_FAMAILY_GB = '1'*/  /* 1:대리인, 2:친권자 */
+			   AND CON_FAMAILY_GB = '?CON_FAMAILY_GB'
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010t2.getInsuPlanMast.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>고지사항</description>
+		<result-name>DS_MAST</result-name>
+		<query><![CDATA[
+				SELECT A.TM_NO
+					 ,A.CON_POL_NO
+					 ,A.CON_ENT_DGN_NO
+					 ,A.CON_CAMP_CD
+					 ,A.CON_TREATY_CD
+					 ,A.CON_APP_DATE
+					 ,A.CON_I_KIND_CD
+					FROM TSOWN.TB_INSU_PLAN_MAST A
+					WHERE 1=1 
+					--A.CON_ENT_DGN_NO  = '941807863720'
+                	?ced_no
+		]]></query>
+		<parameter name='ced_no' value="AND A.CON_ENT_DGN_NO = '?CED_NO'" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010t2.getInsuPlanDtl.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>고지사항</description>
+		<result-name>DS_DETAIL</result-name>
+		<query><![CDATA[
+			SELECT   A.TM_NO 
+					,B.CON_IP_INS_AIM_SEQ    --목적물순번
+					,B.CON_IP_INS_CUST_NO --피보험자ID
+					--,CON_IP_MAJ_REL_CD --주피관계명
+					-- ,FN_CODEBOOK(A.CON_I_KIND_CD || 'REL',CON_IP_MAJ_REL_CD) CON_IP_MAJ_REL_CD
+					,FN_CODEBOOK('CMP017' , B.CON_IP_CONT_RELATION_CD ) CON_IP_MAJ_REL_CD  -- 주피관계명
+					,PLS_DECRYPT_B64(B.CON_IP_ISD_CD) CON_IP_ISD_CD --주민번호
+					,B.CON_IP_ISD_NAME --성명
+					,B.CON_IP_JOB_CD  --직업코드
+					,B.CON_IP_JOB_NAME --직업명
+					,B.CON_IP_VERSION --목적물버전
+			FROM TSOWN.TB_INSU_PLAN_MAST A
+			,TSOWN.TB_INSU_PLAN_DETAIL B
+			WHERE A.TM_NO = B.TM_NO
+			AND A.TM_NO IN (SELECT TM_NO 
+			                FROM TSOWN.TB_INSU_PLAN_MAST 
+			                WHERE 1=1 
+			                --CON_ENT_DGN_NO  = '941807863720'
+			                 ?ced_no
+			                )
+               
+		]]></query>
+		<parameter name='ced_no' value="AND CON_ENT_DGN_NO = '?CED_NO'" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t7.getUserInfo.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>통합계약이력 - 사용자 정보</description>
+		<result-name>DS_USERINFO</result-name>
+		<query><![CDATA[
+		SELECT   A.USERID             			USERID
+				,A.USERGROUPCD              	USERGROUPCD
+				,A.CALLAUTH                 	CALLAUTH
+				,A.TREATYBRHCD              	AGENCY
+				,(SELECT ETCCODE4 
+				  FROM  TSOWN.TB_CODEBOOK 
+				  WHERE CODETYPE = 'SYS999'
+				  AND   CODE = A.USERLEVEL   )  AUTH
+				,A.TREATYCD						TREATYCD
+		FROM TSOWN.TB_USER A
+		WHERE 1=1 --USERID = '68290212'
+		?userid				
+		  
+		]]></query>
+		<parameter name='userid' value="AND USERID = '?USERID'" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t7.getConPPsnNo.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>통합계약이력</description>
+		<result-name>DS_PSN</result-name>
+		<query><![CDATA[
+			SELECT PLS_DECRYPT_B64(A.CON_P_PSN_NO) CON_P_PSN_NO
+			FROM TSOWN.TB_INSU_PLAN_MAST A
+			WHERE 1=1 --A.CON_ENT_DGN_NO  = '941806706877'
+			?ced_no  
+		]]></query>
+		<parameter name='ced_no' value="AND CON_ENT_DGN_NO = '?CED_NO'" default="" />
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t7.getSpCenter.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>제휴사별 센터조회</description>
+		<result-name>DS_SP_CENTER</result-name>
+		<query><![CDATA[
+			SELECT DISTINCT A.TREATYBRHCD
+			FROM TSOWN.TB_USER A
+			WHERE 1=1 --A.CALLAUTH = 'CALLAUTH'
+			?callauth 
+		]]></query>
+		<parameter name='callauth' value="AND A.CALLAUTH = '?CALLAUTH'" default="" />
+	</sql-service>
+	
+
+	<sql-service name='oba.oba010t1t1.getUserGrade.sel'  datasource="is_stat" paging="false" type="simple">
+		<description>사용자 권한조회</description>
+		<result-name>DS_USER_GRADE</result-name>
+		<query><![CDATA[
+				SELECT ETC1 USER_GRADE
+					FROM MS_CODEBOOK
+					WHERE CODE_TYPE = 'SYS011'
+					AND CODE_ID = '05'
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t7.getGroup.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>그룹 조회</description>
+		<result-name>DS_GROUP</result-name>
+		<query><![CDATA[
+		SELECT GROUP_CD ,GROUP_NAME
+        FROM TSOWN.TB_GROUP_INFO
+        WHERE CLOSE_YN = 'N'
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t8.getInsuPlanMast.sel'  datasource="aig_tm" paging="false" type="simple">
+		<description>그룹 조회</description>
+		<result-name>DS_MAST</result-name>
+		<query><![CDATA[
+		SELECT 
+				CON_P_CUST_NO -- 고객 ID
+				,NVL(CON_CAMP_CD,CON_TREATY_CD) USERID -- 사용인 코드가 null일 경우 취급자코드를 넘긴다
+        FROM TSOWN.TB_INSU_PLAN_MAST
+        WHERE CON_ENT_DGN_NO = ?CED_NO
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t9.getAgreeDupInfo.sel'  datasource="aig_tm" paging="false" type="prepared">
+		<description>승환계약 동의 여부 값 조회</description>
+		<result-name>DS_AGREE_INFO</result-name>
+		<query><![CDATA[
+			SELECT
+					TM_NO
+					,SEQ
+					,CUSTNAME
+					,PLS_DECRYPT_B64(PSN_NO) AS PSN_NO
+					,AGREE_GUBN
+					,AGREE_DATE
+					,AGREE_TIME
+					,AGREE_APP_YN
+			FROM
+				TSOWN.TB_AGREE_DUP
+			WHERE
+ 			 	TM_NO = ?TM_NO
+		]]></query>
+		
+	</sql-service>
+	
+	<sql-service name='oba.oba010t1t9.getInsuplanmast.sel'  datasource="aig_tm" paging="false" type="prepared">
+		<description>승환계약 동의 여부 값 조회</description>
+		<result-name>DS_DUP_YN</result-name>
+		<query><![CDATA[
+			SELECT
+					TM_NO,
+					CON_ENT_DGN_NO,
+					DUP_YN
+			FROM
+				TSOWN.TB_INSU_PLAN_MAST
+			WHERE
+ 			 	TM_NO = ?TM_NO
+		]]></query>
+		
+	</sql-service>
+	
+</query-collection>
