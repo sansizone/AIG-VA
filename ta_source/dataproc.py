@@ -24,6 +24,28 @@ class mssqldb(object):
 
 
     def create_connection(self):
+        # 기존 연결이 있으면 먼저 닫기 (멀티스레드 환경에서 안전하게 처리)
+        # 주의: 다른 스레드가 사용 중일 수 있으므로 연결 상태 확인 후 닫기
+        if hasattr(self, 'db') and self.db:
+            try:
+                # 연결이 이미 닫혔는지 확인
+                try:
+                    # 연결이 살아있는지 간단히 확인 (에러가 나면 이미 닫힌 것)
+                    _ = self.db._conn
+                except (AttributeError, Exception):
+                    # 연결이 이미 닫혔거나 유효하지 않음
+                    self.db = None
+                else:
+                    # 연결이 살아있으면 닫기
+                    try:
+                        self.db.close()
+                    except:
+                        pass
+                    self.db = None
+            except:
+                # 이미 닫혔거나 에러 발생 시 무시
+                self.db = None
+        
         try:
             self.db = pymssql.connect(server=self._host, user=self._user, password=self._pwd, database=self._dbname)
             print("[[ds_proc]] DB INFO :: %s:%s  %s  " % (self._host, self._port, self._dbname))
@@ -45,7 +67,7 @@ class mssqldb(object):
         #db = pymssql.connect(server=self._host, user=self._user, password=self._pwd, database=self._dbname)
         with self.db.cursor() as cursor: #
             cursor.execute("SELECT top(50) A.UCID, B.CON_ENT_DGN_NO, A.CONTENT, A.RXTX_GB \
-                              FROM ms_stt_rslt_merge A, ms_stt_meta B \
+                              FROM ms_stt_rslt_merge A WITH (NOLOCK), ms_stt_meta B WITH (NOLOCK) \
                              WHERE A.UCID=B.UCID AND B.STT_FLAG='Y' AND B.TA_FLAG='N' AND B.BATCH_YN='N' AND A.ENC_FLAG='N' \
                              ORDER BY B.CON_ENT_DGN_NO ")
                              # AND B.REG_DATE BETWEEN format(dateadd(d,-1,getdate()),'yyyyMMdd')+'000000' and format(dateadd(d,0,getdate()),'yyyyMMdd')+'235959' ")
@@ -63,36 +85,39 @@ class mssqldb(object):
         self.create_connection()
         #self.db = pymssql.connect(server=self._host, user=self._user, password=self._pwd, database=self._dbname)
         with self.db.cursor() as cursor:
-            sql = "SELECT A.SC_SNO, A.SC_LCLF_CD, A.SC_SCLF_CD, A.QST_CD, A.CNTR_CD, S.CTRA_INSA_CLCD, A.SCRIPT_SENT_ID, A.QST_RATE, A.QST_KEYWORD, A.SCRIPT_TA_SENT  \
-                             FROM ms_script_sent A, \
+            #sql = "SELECT A.SC_SNO, A.SC_LCLF_CD, A.SC_SCLF_CD, A.QST_CD, A.CNTR_CD, S.CTRA_INSA_CLCD, A.SCRIPT_SENT_ID, A.QST_RATE, A.QST_KEYWORD, A.SCRIPT_TA_SENT  \
+            sql = "SELECT A.SC_SNO, A.SC_LCLF_CD, A.SC_SCLF_CD, A.QST_CD, S.CENTERCD as CNTR_CD, S.CTRA_INSA_CLCD, A.SCRIPT_SENT_ID, A.QST_RATE, A.QST_KEYWORD, A.SCRIPT_TA_SENT  \
+                             FROM ms_script_sent A WITH (NOLOCK) \
+                             LEFT JOIN tb_sc_code_mng C WITH(NOLOCK) ON A.SC_LCLF_CD=C.SC_CD AND C.TYPE='L',\
                            		 (SELECT X.UCID, X.CON_ENT_DGN_NO, X.PROD_CD, X.DMBO_CD, CS.Items AS CTRA_INSA_CLCD, X.SC_LCLF_CD, X.CENTERCD, X.G_AGE, X.P_AGE, X.CON_CON_NA_Y_CNT, X.P_INSUR_AGE,  \
                    					X.APT_CHK_TYPE, X.HOME_CHK_TYPE, X.FNNCL_SPEC, X.FNNCL_SPEC_YN  \
                    					FROM (SELECT A.UCID, A.CON_ENT_DGN_NO, A.PROD_CD,A.DMBO_CD,A.CTRA_INSA_CLCD,A.SC_LCLF_CD,A.CENTERCD,A.G_AGE,A.P_AGE,A.CON_CON_NA_Y_CNT,A.P_INSUR_AGE,  \
                 			        	    A.APT_CHK_TYPE, A.HOME_CHK_TYPE, A.FNNCL_SPEC, A.FNNCL_SPEC_YN \
-                			        	    FROM ms_stt_meta A  \
+                			        	    FROM ms_stt_meta A WITH (NOLOCK) \
                 			         	   WHERE A.STT_FLAG='Y'  \
                 			         		 AND A.UCID = %s AND A.CON_ENT_DGN_NO = %s ) X cross apply (SELECT Items FROM fn_split_string(X.CTRA_INSA_CLCD,',')) CS \
                 			       ) S \
                             WHERE A.EXCEPT_YN <> 'Y'  \
 							  AND A.DEL_YN <> 'Y' \
-                              AND A.SC_SNO IN (SELECT SC_SNO FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = S.PROD_CD AND USE_YN='Y'   \
+                              AND A.SC_SNO IN (SELECT SC_SNO FROM TB_SC_MNG WITH (NOLOCK) WHERE USE_YN<>'N' AND PROD_CD = S.PROD_CD AND USE_YN='Y'   \
                                                                               AND CTRA_INSA_CLCD IN (SELECT Items FROM fn_split_string(S.CTRA_INSA_CLCD,','))   \
                                                                               AND SC_LCLF_CD IN (SELECT Items FROM fn_split_string(S.SC_LCLF_CD,',')))  \
-                              AND A.CNTR_CD = (CASE WHEN (SELECT COUNT(SC_SNO)  \
-                                                            FROM ms_script_mng  \
-                                                           WHERE SC_SNO IN (SELECT SC_SNO  FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = S.PROD_CD AND USE_YN='Y'    \
+                              /* AND A.CNTR_CD = (CASE WHEN (SELECT COUNT(SC_SNO)  \
+                                                            FROM ms_script_mng WITH (NOLOCK) \
+                                                           WHERE SC_SNO IN (SELECT SC_SNO  FROM TB_SC_MNG WITH (NOLOCK) WHERE USE_YN<>'N' AND PROD_CD = S.PROD_CD AND USE_YN='Y'    \
                                                                                                             AND CTRA_INSA_CLCD IN (SELECT Items FROM fn_split_string(S.CTRA_INSA_CLCD,','))    \
                                                                                                             AND SC_LCLF_CD  IN (SELECT Items FROM fn_split_string(S.SC_LCLF_CD,',')))    \
-                                                                                                            AND CNTR_CD = S.CENTERCD) = 0 THEN '00000' ELSE S.CENTERCD END )   \
+                                                                                                            AND CNTR_CD = S.CENTERCD) = 0 THEN '00000' ELSE S.CENTERCD END )*/   \
+                              A.CNTR_CD = CASE WHEN C.COMM_YN='Y' THEN '00000' ELSE S.CENTERCD END \
                               AND (A.QST_KIND_CD = 'A' OR A.QST_KIND_CD ='E'  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='B' AND CNTR_CD = A.CNTR_CD AND QST_COND IN (SELECT Items FROM fn_split_string(S.DMBO_CD,',')) ) )  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='C' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.P_INSUR_AGE) )     \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='D' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.CON_CON_NA_Y_CNT) )     \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='F' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='G' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='H' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.APT_CHK_TYPE) )  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='I' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.HOME_CHK_TYPE) )  \
-                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD =S.FNNCL_SPEC AND CNTR_CD = A.CNTR_CD AND QST_COND = S.FNNCL_SPEC_YN) ) )" 
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='B' AND CNTR_CD = A.CNTR_CD AND QST_COND IN (SELECT Items FROM fn_split_string(S.DMBO_CD,',')) ) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='C' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.P_INSUR_AGE) )     \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='D' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.CON_CON_NA_Y_CNT) )     \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='F' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='G' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.G_AGE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='H' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.APT_CHK_TYPE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD ='I' AND CNTR_CD = A.CNTR_CD AND QST_COND = S.HOME_CHK_TYPE) )  \
+                               OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WITH (NOLOCK) WHERE QST_KIND_CD =S.FNNCL_SPEC AND CNTR_CD = A.CNTR_CD AND QST_COND = S.FNNCL_SPEC_YN) ) )" 
             cursor.execute(sql, (_textid, _con_ent_dgn_no) )
 
             resultset = cursor.fetchall()
@@ -111,7 +136,7 @@ class mssqldb(object):
             with self.db.cursor() as cursor:
                 sql = "IF NOT EXISTS \
     								(SELECT * \
-    								   FROM ms_regu_score \
+    								   FROM ms_regu_score WITH (NOLOCK) \
     							      WHERE CON_ENT_DGN_NO=%s AND UCID=%s AND QST_CD=%s AND SCRIPT_SENT_ID=%s AND STT_SENT_ID=%s) \
     				  INSERT INTO  ms_regu_score (CON_ENT_DGN_NO, UCID, SC_SNO, SC_LCLF_CD, SC_SCLF_CD, QST_CD, CNTR_CD, CTRA_INSA_CLCD,  \
                                                   SCRIPT_SENT_ID, STT_SENT_ID, START_TIME, TA_SCORE)  \
@@ -125,10 +150,18 @@ class mssqldb(object):
                                               c_set[8], c_set[9], c_set[10], str(round(c_set[11]*100)) ) )
                         self.db.commit()
         except Exception, e:
+            if self.db:
+                try:
+                    self.db.rollback()
+                except:
+                    pass
             raise e
-            self.db.rollback()
         finally :
-            self.db.close()
+            if self.db:
+                try:
+                    self.db.close()
+                except:
+                    pass
 
 
     """
@@ -144,10 +177,18 @@ class mssqldb(object):
                 cursor.execute( sql, (_flag, now.strftime('%Y%m%d%H%M%S'), _textid, _conid) )
                 self.db.commit()
         except Exception, e:
+            if self.db:
+                try:
+                    self.db.rollback()
+                except:
+                    pass
             raise e
-            self.db.rollback()
         finally :
-            self.db.close()
+            if self.db:
+                try:
+                    self.db.close()
+                except:
+                    pass
 
 
     """
@@ -157,7 +198,7 @@ class mssqldb(object):
         self.create_connection()
         with self.db.cursor() as cursor: #
             cursor.execute("SELECT UCID, CON_ENT_DGN_NO \
-                              FROM ms_stt_meta  \
+                              FROM ms_stt_meta WITH (NOLOCK) \
                              WHERE TA_FLAG='S' \
                                AND DATEDIFF(minute, substring(ta_r_time,1,4)+'-'+substring(ta_r_time,5,2)+'-'+substring(ta_r_time,7,2)+' '+substring(ta_r_time,9,2)+':'+substring(ta_r_time,11,2)+':'+substring(ta_r_time,13,2), GETDATE()) >= 60 ")
             resultset = cursor.fetchall()
