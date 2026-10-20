@@ -1,0 +1,606 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xwing="xwing.net">
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=8;IE=9" />
+<meta http-equiv="Content-Type" content="text/html;charset=UTF-8"></meta>
+
+<link href="data:image/gif;" rel="icon" type="image/x-icon" />
+<link rel="shortcut icon" href="../msens_icon.ico" />
+
+<script src='../xwing/js/xwing.js' type="text/javascript" charset="UTF-8"></script>
+<script src='../js/common.js' type="text/javascript" charset="UTF-8"></script>
+<script src='../js/scriptutil.js' type="text/javascript" charset="UTF-8"></script>
+<script src="../js/player.js" type="text/javascript" charset="UTF-8"></script>
+<script src="../js/xwing.dataset.js" type="text/javascript" charset="UTF-8"></script>
+<link href="../css/base.css" type="text/css" rel="stylesheet" charset="UTF-8" />
+<style>
+
+	#grd_script_list .xw-datagrid-area-body tbody tr.chk_select {
+		background: #ffd5c4 !important;
+	} 
+	
+	 .sclf_select{
+		    font-weight: 600 !important;
+		    /* font-size: larger; */
+		    border-bottom:2px solid #07B9DC;
+	}
+	 #lbl_sclf_0 .xw-mod-font:after,#lbl_sclf_1 .xw-mod-font:after,#lbl_sclf_2 .xw-mod-font:after,#lbl_sclf_3 .xw-mod-font:after,#lbl_sclf_4 .xw-mod-font:after
+	 ,#lbl_sclf_5 .xw-mod-font:after,#lbl_sclf_6 .xw-mod-font:after,#lbl_sclf_7 .xw-mod-font:after,#lbl_sclf_8 .xw-mod-font:after,#lbl_sclf_9 .xw-mod-font:after
+	 ,#lbl_sclf_10 .xw-mod-font:after,#lbl_sclf_11 .xw-mod-font:after,#lbl_sclf_12 .xw-mod-font:after,#lbl_sclf_13 .xw-mod-font:after,#lbl_sclf_14 .xw-mod-font:after,#lbl_sclf_15 .xw-mod-font:after{
+		    content:'|';
+		    position: absolute;
+			right: 5px;color:#8D98A9;
+			font-size:8px;
+	}
+</style>
+<script type="text/javascript" charset="UTF-8">/*<![CDATA[*/var sclf_cd="", sclf_nm="";
+var rec_key = "", call_time="",file_path = "";
+var v_url = "service::oba.oba010t3.getDetail.sel.do";
+var duplicateIdx=[];
+
+var lbl_sclfs = {
+	clickIndex : 0,
+	getSclfCd : function () {
+		return $DS_SCRIPT_RES_SCLF.getValue(this.clickIndex,'SCLF_CD');
+	},
+	setItemindex : function (i) {
+		return this.clickIndex = i; 
+	}
+};
+
+function page_load(event) {
+	try{
+		XwingObject();
+		
+		/*요약탭 안쓸경우 해당 소스 주석*/
+		sclf_cd = parent.sclf_cd;
+		$lbl_sclf_nm.setValue(parent.sclf_nm);
+		
+		//ban select 초기화
+		//parent.banRowNum="0";
+
+		/*요약탭 안쓸경우 해당 소스 주석*/
+		if(parent.sclf_cd == ""){
+			$lbl_subtitle2.setValue("VRS준수결과(전체)");
+			$pnl_sclf_nm.setVisible(false);
+			$DS_SCRIPT_STT.clearData();
+			$DS_SCRIPT_RES.clearData();
+			
+		}else{
+			$lbl_subtitle2.setValue("VRS준수결과");
+			//$pnl_sclf_nm.setVisible(true);
+		}
+
+		f_codebook_sel();
+		getCtraRes();
+	}catch(e){
+		xwing.Dialog.alert(e);
+	}
+}
+
+/*
+ * 임계치 이상이지만, 체크가 필요한 항목을 하이라이트하는데 필요한 기준치= 코드북 등록(vss190)
+ * */
+function f_codebook_sel() {
+	var param = {
+			cmd : "getCodes",
+			codeType : "SYS105,VSS190",
+			useyn : "Y"
+		};
+		var opt = {
+			reqId : "f_codebook_sel",
+			url : "service::cs.com.codeutil.do",
+			param : param
+		};
+		Xwing.request(opt, callback);
+}
+
+
+function getCtraRes(){
+	var opt = {
+			reqId: "getCtraRes",
+			url: v_url,
+			param: {
+				_sqlName  : 'oba.oba010t3.getCtraRes.sel,oba.oba010t3.getSclfcd.sel'
+				
+				,CED_NO : parent.ced_no
+			},
+			indicator: null,
+			showError: true
+	};
+	Xwing.request(opt, callback);
+}
+
+function getVrsDetailRes(){
+	//현재 stt_sent를 기준으로 start_time을 가져오고 있는데, 추후에 stt_sent_id를 기준으로 start_time, stt_sent 가져오는걸로 수정해야됨!!
+	var opt = {
+			reqId: "getVrsRes",
+			url: v_url,
+			param: {
+				_sqlName  : 'oba.oba010t3.getVrsDetailRes.sel'
+				,CED_NO : parent.ced_no
+				//,SCLF_CD : parent.sclf_cd
+				//,SCLF_NM : parent.sclf_nm
+				,CTRA_INSA_CLCD : $cmb_ctra.getValue()
+			},
+			indicator: null,
+			showError: true
+	};
+	Xwing.request(opt, callback);
+
+}
+
+function getVrsDetailStt(){
+	var opt = {
+			reqId: "getDetailStt",
+			url: "service::msens.xcron.hansol.sttEncryptWebaction.do",
+			param: {
+				_sqlName  : 'oba.oba010t3.getVrsDetailRes2.sel'
+				,TYPE : 'D'
+				//,CED_NO : "941806710728"
+				,CED_NO : parent.ced_no
+				//,SCLF_CD : parent.sclf_cd
+				//,SCLF_NM : parent.sclf_nm
+				//,DS_RES : $DS_SCRIPT_STT
+				,CTRA_INSA_CLCD : $cmb_ctra.getValue()
+			},
+			indicator: null,
+			showError: true
+	};
+	Xwing.request(opt, callback);
+}
+
+/* ***********************************************************
+ * 	콜백  함수
+ *************************************************************/
+function callback(reqId, res, err, xhr){
+	if( res.Error != '0' ){
+			alert('ResultCode : ' + res.ResultCode + '\n\n' + 'ResultMessage : ' + res.ResultMessage);
+		return;
+	}
+
+	switch (reqId) {
+		case "f_codebook_sel":
+			$DS_SYS105.setData(res.SYS105.column, res.SYS105.record);
+			$DS_VSS190.setData(res.VSS190.column, res.VSS190.record);
+//			var help="※계피구분코드 ";
+//			for(var i=0, len = $DS_SYS105.size(); i<len; i++){
+//				help += ' '+$DS_SYS105.getValue(i,"CODEID")+":"+$DS_SYS105.getValue(i,"CODENAME");
+//			}
+//			$lbl_help.setValue(help);
+//			$lbl_help.setWidth(50+$lbl_help.getValue().length*6);
+
+		break;
+
+		case "getCtraRes":
+			$DS_SCRIPT_RES_CTRA.setData(res.DS_SCRIPT_RES_CTRA.column, res.DS_SCRIPT_RES_CTRA.record);
+			$DS_SCRIPT_RES_SCLF.setData(res.DS_SCRIPT_RES_SCLF.column, res.DS_SCRIPT_RES_SCLF.record);
+			
+		
+			
+			if(parent.sclf_cd == ""){
+				$cmb_ctra.setItemindex("0");
+				$DS_SCRIPT_RES_SCLF.filter("[CTRA_INSA_CLCD =='"+$cmb_ctra.getValue()+"']");
+				lbl_sclfs.setItemindex("0");		
+			}else{
+				$cmb_ctra.setValue(parent.cic);
+				//$DS_SCRIPT_RES_SCLF.filter("[CTRA_INSA_CLCD =='"+$cmb_ctra.getValue()+"'][SCLF_CD == '"+lbl_sclfs.getSclfCd()+"']"); 요약에서 넘길때 넘기는 한개만 표시하는 경우
+				$DS_SCRIPT_RES_SCLF.filter("[CTRA_INSA_CLCD =='"+$cmb_ctra.getValue()+"']");
+				lbl_sclfs.setItemindex($DS_SCRIPT_RES_SCLF.indexOfRow('SCLF_CD',parent.sclf_cd));
+			}
+			lbl_sclf_setting();
+			highlight_sclfCheck();
+			getVrsDetailRes();
+
+		break;
+
+		case "getVrsRes":
+			$DS_SCRIPT_RES_COPY.setData(res.DS_SCRIPT_RES.column, res.DS_SCRIPT_RES.record);
+			$DS_SCRIPT_RES.setData($DS_SCRIPT_RES_COPY.getColumnInfo(),$DS_SCRIPT_RES_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
+			highlight_multiCheck();
+			getVrsDetailStt();
+
+		break;
+
+		case "getDetailStt" :
+			$DS_SCRIPT_STT_COPY.setData(res.DS_RES.column, res.DS_RES.record);
+			$DS_SCRIPT_STT.setData($DS_SCRIPT_STT_COPY.getColumnInfo(), $DS_SCRIPT_STT_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
+			highlightSelection();
+			
+		break;
+	}
+}
+function grd_script_stt_click(event) {
+	var nCell = event.cell._getColIndex();
+
+	var selected = document.querySelectorAll("#grd_script_stt .select");
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+
+	$("#grd_script_stt .xw-datagrid-area-body table tbody tr[cy='"+event.rowIdx+"']").addClass("select");
+	if(nCell == 0){
+		rec_key =  $DS_SCRIPT_STT.getValue(event.rowIdx,'UCID');
+		call_time = $DS_SCRIPT_STT.getValue(event.rowIdx,'UCID_DATE');
+		file_path = $DS_SCRIPT_STT.getValue(event.rowIdx,'FILE_FULL_PATH');
+		if(parent.selected_ucid != rec_key){
+			parent.load_player(rec_key,call_time,'L', file_path);
+			parent.selected_ucid = rec_key;
+			parent.cmb_ucid_date_change2(rec_key);
+		}
+	}else if(nCell == 1){
+		var selectedRec = $DS_SCRIPT_STT.getValue(event.rowIdx,'UCID');
+		var selectedTime = $DS_SCRIPT_STT.getValue(event.rowIdx,'UCID_DATE');
+		var selectedFile =  $DS_SCRIPT_STT.getValue(event.rowIdx,'FILE_FULL_PATH');
+
+		if(parent.selected_ucid != '' && parent.selected_ucid != selectedRec){
+			xwing.Dialog.alert("현재 청취하고 계시는 녹취 콜과 다른 콜입니다.\n 좌측의 청취 버튼을 클릭해주세요.");
+			return;
+		}else{
+			var start_point = $DS_SCRIPT_STT.getValue(event.rowIdx,'START_TIME');
+			parent.seekToSTT(start_point);
+		}
+	}
+}
+
+
+function grd_script_list_click(event) {
+	var res_qst_cd = $DS_SCRIPT_RES.getValue(event.rowIdx,'QST_CD');
+	var res_sent_id = $DS_SCRIPT_RES.getValue(event.rowIdx,'SENT_ID');
+	var stt_qst_cd="", stt_sent_id="";
+	duplicateIdx=[];
+
+	var res_key = res_qst_cd+"/"+res_sent_id;
+	var stt_key ="";
+
+	var selected = document.querySelectorAll("#grd_script_stt .select");
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+
+	/*
+	 * background-color를 입히고, 클릭한 row는 클릭한 color가 입힐 수 있도록 remove 시킴
+	 * */
+	highlight_multiCheck();
+	$("#grd_script_list .xw-datagrid-area-body table tbody tr[cy='"+event.rowIdx+"']").removeClass("chk_select");
+	
+	duplicateIdx = $DS_SCRIPT_STT.searchRow("[QST_CD =='"+res_qst_cd+"'][SENT_ID=='"+res_sent_id+"']");
+
+	for(var i =0; i< duplicateIdx.length; i++){
+		$("#grd_script_stt .xw-datagrid-area-body table tbody tr[cy='"+duplicateIdx[i]+"']").addClass("select");
+	}
+
+	$DS_SCRIPT_STT.setCursor(duplicateIdx[0]);
+
+}
+
+function cmb_ctra_change(event) {
+
+	var selected = document.querySelectorAll("#grd_script_stt .select");
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+
+	$DS_SCRIPT_STT.clearData();
+
+	if(parent.sclf_cd == ""){
+		$DS_SCRIPT_RES_SCLF.filter("[CTRA_INSA_CLCD =='"+$cmb_ctra.getValue()+"']");
+	}else{
+//		$DS_SCRIPT_RES_SCLF.filter("[CTRA_INSA_CLCD =='"+$cmb_ctra.getValue()+"'][SCLF_CD == '"+lbl_sclfs.getSclfCd()+"']"); 요약에서 넘길때 넘기는 한개만 표시하는 경우
+		$DS_SCRIPT_RES_SCLF.filter("[CTRA_INSA_CLCD =='"+$cmb_ctra.getValue()+"']");
+	}
+	
+	lbl_sclf_setting();
+	lbl_sclfs.setItemindex("0");
+	highlight_sclfCheck();
+	getVrsDetailRes();
+	
+}
+
+function lbl_sclf_setting(){
+	var tx = "",tx_cnt="",tooltipText="";
+	
+	for(var i = 0; i<15; i++){
+		eval("$lbl_sclf_"+i+".setVisible(false)");
+	}
+	
+	
+	if($DS_SCRIPT_RES_SCLF.size()>0){
+		//if(parent.sclf_cd == ""){
+			var txtWidth="",fontSize="", txtSize="", cntSize="",enableTextCnt="";		
+			for(var i = 0; i<$DS_SCRIPT_RES_SCLF.size(); i++){
+				
+				tx = $DS_SCRIPT_RES_SCLF.getValue(i,'TEXT');
+				tx_cnt = $DS_SCRIPT_RES_SCLF.getValue(i,'TEXT_CNT');
+				tooltipText = tx+" (준수개수:"+tx_cnt+")";
+				txtWidth = eval("$lbl_sclf_"+i+".getWidth()");
+				fontSize = eval("$lbl_sclf_"+i+".getFontsize()");
+				txtSize = tx.length;
+				cntSize = (("("+tx_cnt+")").length);
+				enableTextCnt = Math.ceil(( txtWidth / fontSize ));
+				
+				if((txtSize*fontSize)+(cntSize*fontSize) > txtWidth){
+					tx=tx.substring(0,enableTextCnt-cntSize+1)+"...";
+				} 
+				
+				tx =tx+"("+tx_cnt+")";
+				
+//				var left = "";
+//				left = i==0? '90' : i==4 || i==9 ? '10' : eval("$lbl_sclf_"+(i-1)+".getLeft()")+eval("$lbl_sclf_"+(i-1)+".getWidth()");
+//				eval("$lbl_sclf_"+i+".setLeft(left)");
+				eval("$lbl_sclf_"+i+".setValue(tx)");
+				eval("$lbl_sclf_"+i+".setTooltiptext(tooltipText)");
+				eval("$lbl_sclf_"+i+".setVisible(true)");
+			}
+			
+	/*	}else{ 요약에서 넘길때 넘기는 한개만 표시하는 경우
+				
+				for(var i = 0; i<$DS_SCRIPT_RES_SCLF.size(); i++){
+					
+					tx = $DS_SCRIPT_RES_SCLF.getValue(i,'TEXT');
+					tx_cnt = $DS_SCRIPT_RES_SCLF.getValue(i,'TEXT_CNT');
+					tooltipText = tx+" (준수개수:"+tx_cnt+")";
+					
+					tx =tx+"("+tx_cnt+")";
+					
+					txtSize = tx.length;
+					fontSize = eval("$lbl_sclf_"+i+".getFontsize()");
+		
+					eval("$lbl_sclf_"+i+".setWidth(txtSize*fontSize-10)");
+					eval("$lbl_sclf_"+i+".setFontsize(11)");
+					eval("$lbl_sclf_"+i+".setValue(tx)");
+					eval("$lbl_sclf_"+i+".setTooltiptext(tooltipText)");
+					eval("$lbl_sclf_"+i+".setVisible(true)");
+				}
+		}*/
+	}else{ //이거 쓸려면 $DS_SCRIPT_RES_SCLF 에 sclf_cd 필터를 걸어서 그 사이즈를 체크해야함
+		var cnt = "0/0";
+		if(parent.sclf_cd == ""){
+			tx ="준수 문장이 없습니다";
+		}else{
+			tx =parent.sclf_nm+"("+cnt+")";
+		}
+		tooltipText = tx+" (준수개수:"+cnt+")";
+
+		eval("$lbl_sclf_"+0+".setValue(tx)");
+		eval("$lbl_sclf_"+0+".setTooltiptext(tooltipText)");
+		eval("$lbl_sclf_"+0+".setVisible(true)");
+	}
+}
+
+
+
+
+function lbl_sclf_change(event){
+	var sclf_cd = "";
+	if(event != null){
+		lbl_sclfs.clickIndex = event.source._attr.id;
+		lbl_sclfs.clickIndex =lbl_sclfs.clickIndex.replace(/[^0-9]/gi,'');
+	}
+	var selected = document.querySelectorAll("#grd_script_stt .select");
+	
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+	
+	$DS_SCRIPT_RES.setData($DS_SCRIPT_RES_COPY.getColumnInfo(),$DS_SCRIPT_RES_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
+	$DS_SCRIPT_STT.setData($DS_SCRIPT_STT_COPY.getColumnInfo(), $DS_SCRIPT_STT_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
+	//
+	highlight_sclfCheck();
+	$DS_SCRIPT_RES.setCursor(0);
+	highlightSelection();
+	highlight_multiCheck();
+}
+
+/*function cmb_sclf_cd_change(event) {
+	var selected = document.querySelectorAll("#grd_script_stt .select");
+
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+
+	$DS_SCRIPT_RES.setData($DS_SCRIPT_RES_COPY.getColumnInfo(),$DS_SCRIPT_RES_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
+	$DS_SCRIPT_STT.setData($DS_SCRIPT_STT_COPY.getColumnInfo(), $DS_SCRIPT_STT_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
+	$DS_SCRIPT_RES.setCursor(0);
+	highlightSelection();
+	highlight_multiCheck();
+}*/
+
+function highlightSelection(){
+	var idxs = $DS_SCRIPT_STT.searchRow("[QST_CD =='"+$DS_SCRIPT_RES.getValue(0,"QST_CD")+"'][SENT_ID=='"+$DS_SCRIPT_RES.getValue(0,"SENT_ID")+"']");
+	if(idxs != ''){
+		for(var i =0; i< idxs.length; i++){
+			//$("#grd_script_stt .xw-datagrid-area-body table tbody tr[cy='"+idxs[i]+"']").addClass("select");
+			$("#grd_script_stt .xw-datagrid-area-body table tbody tr[cy='"+duplicateIdx[i]+"']").addClass("select");
+		}
+
+		$DS_SCRIPT_STT.setCursor(idxs[0]);
+	}else{
+		$("#grd_script_stt .xw-datagrid-area-body table tbody tr[cy='"+0+"']").removeClass("select");
+	}
+	
+}
+
+function highlight_sclfCheck(){
+	$(".xw-label-label").removeClass("sclf_select");
+	var selectLbl = $("#lbl_sclf_"+lbl_sclfs.clickIndex+" .xw-mod-font");
+	selectLbl.addClass("sclf_select");
+}
+
+function highlight_multiCheck(){
+	
+	var check_val = parseInt($DS_VSS190.getValue(0,"ETC2"));
+	for(var i=0; i< $DS_SCRIPT_RES.size();i++){
+		/*var qst_rate =  parseInt($DS_SCRIPT_RES.getValue(i,"QST_RATE"));
+		var score =  parseInt($DS_SCRIPT_RES.getValue(i,"SCORE"));
+
+		if(score >= qst_rate && score < check_val){
+			$("#grd_script_list .xw-datagrid-area-body table tbody tr[cy='"+i+"']").addClass("chk_select");
+		}*/
+		
+		// 현재 준수여부를 C로 해논걸 체크가 필요한 것으로 보고 있음, 혹시 해당 FLAG가 변경되거나 없어지면 위에 주석한거 사용하면됨
+		if($DS_SCRIPT_RES.getValue(i,"REGU_YN") == "C"){ 
+			$("#grd_script_list .xw-datagrid-area-body table tbody tr[cy='"+i+"']").addClass("chk_select");
+		}
+	}
+}
+
+//*******************************************************
+//UTIL
+//*******************************************************
+function find_duplicates(arr) {
+  var len=arr.length,
+      out=[],
+      counts={};
+
+  for (var i=0;i<len;i++) {
+    var item = arr[i];
+    counts[item] = counts[item] >= 1 ? counts[item] + 1 : 1;
+    if (counts[item] === 2) {
+      out.push(item);
+    }
+  }
+
+  return out;
+}
+/* ***********************************************************
+ * 	expr
+ *************************************************************/
+function setColor(cellObj,rowIdx) {
+	var val={};
+
+	if(duplicateIdx.length > -1){
+		for(var i=0, len=duplicateIdx.length; i<len; i++){
+
+			if(duplicateIdx[i]==rowIdx){
+				val['bgcolor'] = "#fff";
+			}
+		}
+	}
+	return val;
+}
+
+function setColor2(cellObj,rowIdx) {
+	var val={};
+
+	if($DS_SCRIPT_STT.getValue(rowIdx-1,"UCID") != $DS_SCRIPT_STT.getValue(rowIdx,"UCID")){
+		val['bgimage'] = "../images/icon_notice.png";
+		val['bgimagerepeat'] = "no-repeat";
+		val['bgimagealign'] = "center center";
+	}
+
+	return val;
+}
+
+/*]]>*/</script>
+<xwing:data>
+	<xwing:dataset id="DS_SCRIPT_RES" description="스크립트 결과">
+		<xwing:dataset-column id="SCRIPT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="SCORE"></xwing:dataset-column>
+		<xwing:dataset-column id="QST_NM"></xwing:dataset-column>
+		<xwing:dataset-column id="CTRA_INSA_CLCD"></xwing:dataset-column>
+		<xwing:dataset-column id="SENT_ID"></xwing:dataset-column>
+		<xwing:dataset-column id="QST_CD"></xwing:dataset-column>
+		<xwing:dataset-column id="REGU_YN"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset id="DS_SCRIPT_STT" description="준수문장">
+		<xwing:dataset-column id="STT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="START_TIME"></xwing:dataset-column>
+		<xwing:dataset-column id="UCID"></xwing:dataset-column>
+		<xwing:dataset-column id="UCID_DATE"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset id="DS_SYS105">
+		<xwing:dataset-column id="CODEID"></xwing:dataset-column>
+		<xwing:dataset-column id="CODENAME"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset description="스크립트 결과" id="DS_SCRIPT_RES_CTRA">
+		<xwing:dataset-column id="CODE_ID"></xwing:dataset-column>
+		<xwing:dataset-column id="CODE_NAME"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset id="DS_SCRIPT_RES_SCLF">
+		<xwing:dataset-column id="SC_SCLF_CD"></xwing:dataset-column>
+		<xwing:dataset-column id="SCLF_NM"></xwing:dataset-column>
+		<xwing:dataset-column id="TEXT"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset id="DS_SCRIPT_RES_COPY"></xwing:dataset>
+	<xwing:dataset id="DS_SCRIPT_STT_COPY"></xwing:dataset>
+	<xwing:dataset id="DS_VSS190" description="VRS 체크 가이드라인"></xwing:dataset>
+	<xwing:dataset description="준수문장" id="DS_YOYAK">
+		<xwing:dataset-column id="TEXT"></xwing:dataset-column>
+		<xwing:dataset-column id="SCLF_CD"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset description="준수문장" id="DS_YOYAK_TEXT">
+		<xwing:dataset-column id="TEXT"></xwing:dataset-column>
+		<xwing:dataset-column id="SCLF_CD"></xwing:dataset-column>
+	</xwing:dataset>
+</xwing:data>
+</head>
+<body>
+	<xwing:page id="page" title="콜청취" width="752" height="667" load="page_load" scroll="false" top="-5">
+		<xwing:datagrid id="grd_script_list" left="5" top="109" width="360" height="553" rownum="true" checkbox="false" binddataset="DS_SCRIPT_RES" anchor="top bottom left" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" click="grd_script_list_click">
+			<xwing:datagrid-colgroup>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column width="250"></xwing:datagrid-column>
+				<xwing:datagrid-column width="60"></xwing:datagrid-column>
+			</xwing:datagrid-colgroup>
+			<xwing:datagrid-head>
+				<xwing:datagrid-row height="30">
+					<xwing:datagrid-cell text="질의유형"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="VRS" halign="center" fontweight="bold"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="준수율" halign="center" fontweight="bold"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-head>
+			<xwing:datagrid-body>
+				<xwing:datagrid-row>
+					<xwing:datagrid-cell bindcolumn="QST_NM" suppress="true"></xwing:datagrid-cell>
+					<xwing:datagrid-cell halign="left" bindcolumn="SCRIPT_SENT"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="SCORE" halign="center"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-body>
+		</xwing:datagrid>
+		<xwing:label id="lbl_help" value="※계피구분코드" left="1" top="45" width="473" height="16" anchor="left" fontsize="9" visible="false"></xwing:label>
+		<xwing:label id="lbl_subtitle2" value="VRS준수결과" left="0" top="0" width="752" height="40" styles="label_boxtitle" halign="left" anchor="top right left" bggradientdir="horizontal" bgimagealign="left center"></xwing:label>
+		<xwing:datagrid id="grd_script_stt" left="377" top="109" width="370" height="554" rownum="true" checkbox="false" binddataset="DS_SCRIPT_STT" anchor="all" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" multiselectable="false" click="grd_script_stt_click">
+			<xwing:datagrid-colgroup>
+				<xwing:datagrid-column width="50"></xwing:datagrid-column>
+				<xwing:datagrid-column width="290"></xwing:datagrid-column>
+			</xwing:datagrid-colgroup>
+			<xwing:datagrid-head>
+				<xwing:datagrid-row height="30">
+					<xwing:datagrid-cell text="녹취" halign="center" fontweight="bold"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="준수문장" halign="center" fontweight="bold"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-head>
+			<xwing:datagrid-body>
+				<xwing:datagrid-row>
+					<xwing:datagrid-cell halign="left" cursor="pointer" suppress="true" expr="setColor2" bindcolumn="UCID_DATE" groupable="true" fontcolor="#ffffff" bgimagealign="center center"></xwing:datagrid-cell>
+					<xwing:datagrid-cell halign="left" bindcolumn="STT_SENT" cursor="pointer"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-body>
+		</xwing:datagrid>
+		<xwing:label id="lbl4_0_1_0" left="4" top="50" value="소분류명 :" height="25" width="80" anchor="none" styles="label_subtitle"></xwing:label>
+		<xwing:panel id="pnl_sclf_nm" left="150" top="10" width="496" height="26" scroll="false" visible="false">
+			<xwing:label id="lbl_sclf_nm" left="101" top="-1" height="25" width="383" anchor="none" value="가입설계번호"></xwing:label>
+			<xwing:label id="lbl4_0_0" left="75" top="0" value=":" height="25" width="20" anchor="none" styles="label_subtitle"></xwing:label>
+			<xwing:label id="lbl4_0_1" left="5" top="0" value="소분류명" height="25" width="80" anchor="none" styles="label_subtitle"></xwing:label>
+		</xwing:panel>
+		<xwing:splitbar id="splitbar0" left="369" top="110" width="5" visible="true" bindwidget="r:grd_script_list,r:grd_script_stt" height="555" anchor="top bottom" cursor="w-resize" styles="split_h"></xwing:splitbar>
+		<xwing:combo id="cmb_ctra" left="576" top="8" domaincodecolumn="CODE_ID" width="166" height="25" domaintextcolumn="CODE_NAME" domaindataset="DS_SCRIPT_RES_CTRA" change="cmb_ctra_change"></xwing:combo>
+		<xwing:label id="lbl_sclf_0" value="개개인(신용)정보인(신용)정보개인(신용)정보" left="90" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_1" value="청약 동의(9/9)" left="222" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_2" value="대리인 정보 확인 (9/9)" left="354" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_3" value="CRS/FATCA 본인(9/9)" left="486" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_4" value="CRS/FATCA 본인(9/9)" left="618" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_5" value="개인(신용)정보(9/9)&#10;" left="10" top="68" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_6" value="청약 동의(9/9)" left="158" top="68" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_7" value="대리인 정보 확인 (9/9)" left="306" top="68" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_8" value="CRS/FATCA 본인(9/9)" left="454" top="68" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_9" value="CRS/FATCA 본인(9/9)" left="602" top="68" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_10" value="개인(신용)정보(9/9)&#10;" left="10" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_11" value="청약 동의(9/9)" left="158" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_12" value="대리인 정보 확인 (9/9)" left="306" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_13" value="CRS/FATCA 본인(9/9)" left="454" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_14" value="CRS/FATCA 본인(9/9)" left="602" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+	</xwing:page>
+</body>
+</html>

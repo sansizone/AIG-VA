@@ -26,24 +26,33 @@
             <LogService Request="log.insertservicelog"/>
         </Service>
 
-        <Service Id="SVC_COM_003" Runnable="true">
-            <Description>스크립트 코드 관리 변경내역 수집(TB_SC_CODE_MNG, TB_SC_MNG)</Description>
+         <Service Id="SVC_COM_003" Runnable="true">
+            <Description>스크립트 코드 관리 변경내역 수집(TB_SC_CODE_MNG, TB_SC_MNG, TB_CODEBOOK_EST312)</Description>
             <RequestFlow>
 				<RequestGroup Value="db.tm.tb_sc_code_mng.select,db.msens.tb_sc_code_mng.insert"/>
-				<RequestGroup Value="db.tm.tb_sc_mng.select,db.msens.tb_sc_mng.insert"/>
-				<RequestGroup Value="db.tm.tb_codebook_SYS119.select,db.msens.ms_codebook_SYS105.insert"/>
+				<!--<RequestGroup Value="db.tm.tb_sc_mng.select,db.msens.tb_sc_mng.insert"/>-->
+				<!--<RequestGroup Value="db.tm.tb_codebook_SYS119.select,db.msens.ms_codebook_SYS105.insert"/>-->
+				<RequestGroup Value="db.tm.tb_codebook_EST312.select,db.msens.ms_codebook_EST312.insert"/>
 			</RequestFlow>
+			<Parameter>
+				<Field Name="from_date" Length="8"/>
+				<Field Name="to_date" Length="8"/>
+				<Field Name="chnl_clcd" Length="2"/>
+			</Parameter>
             <LogService Request="log.insertservicelog"/>
         </Service>
-        
+               
          <Service Id="SVC_COM_004" Runnable="true">
             <Description>질의유형관리(TB_QST_KIND_MNG)</Description>
             <RequestFlow>
 				<RequestGroup Value="db.msens.tb_qst_kind_mng.delete,db.tm.tb_qst_kind_mng.select,db.msens.tb_qst_kind_mng.insert"/>
 			</RequestFlow>
+			<Parameter>
+				<Field Name="chnl_clcd" Length="2"/>
+			</Parameter>
             <LogService Request="log.insertservicelog"/>
         </Service>
-
+        
         <Service Id="SVC_COM_005" Runnable="true">
             <Description>스크립트 질의관리 수집(TB_SC_QST_MNG) : NO PARAM=> 전 일꺼 가져옴</Description>
             <RequestFlow>
@@ -52,6 +61,7 @@
 			<Parameter>
 				<Field Name="from_date" Length="14"/>
 				<Field Name="to_date" Length="14"/>
+				<Field Name="chnl_clcd" Length="2"/>
 			</Parameter>
             <LogService Request="log.insertservicelog"/>
         </Service>
@@ -72,6 +82,7 @@
 			<Parameter>
 				<Field Name="from_date" Length="14"/>
 				<Field Name="to_date" Length="14"/>
+				<Field Name="chnl_clcd" Length="2"/>
 			</Parameter>
             <LogService Request="log.insertservicelog"/>
         </Service>	
@@ -203,11 +214,25 @@
             <LogService Request="log.insertservicelog"/>
         </Service>
         
-         <Service Id="SVC_COM_017" Runnable="true">
+        <!--  <Service Id="SVC_COM_017" Runnable="true">
             <Description>[UAT -> PROD] 질의유형관리(TB_QST_KIND_MNG)</Description>
             <RequestFlow>
 				<RequestGroup Value="db.msens.tb_qst_kind_mng.utp.delete,db.uat.msens.tb_qst_kind_mng.utp.select,db.msens.tb_qst_kind_mng.utp.insert"/>
 			</RequestFlow>
+			<Parameter>
+				<Field Name="chnl_clcd" Length="2"/>
+			</Parameter>
+            <LogService Request="log.insertservicelog"/>
+        </Service> -->
+        
+        <Service Id="SVC_COM_017" Runnable="true">
+            <Description>[UAT -> PROD] 질의유형관리(TB_QST_KIND_MNG)</Description>
+            <RequestFlow>
+            	<RequestGroup Value="msens.xcron.hansol.splitkindWebaction"/>
+			</RequestFlow>
+			<Parameter>
+				<Field Name="chnl_clcd" Length="2"/>
+			</Parameter>
             <LogService Request="log.insertservicelog"/>
         </Service>
         
@@ -279,6 +304,76 @@
 			</Parameter> 
             <LogService Request="log.insertservicelog"/>
         </Service>
+        
+        <!-- 추가 :: 금칙어 운영이관(210913) -->
+        <Service Id="SVC_COM_024" Runnable="true">
+            <Description>[UAT -> PROD] 금칙어코드 운영이관</Description>
+            <RequestFlow>
+				<RequestGroup Value="db.prod.msens.ms_codebook_VSS150_VSS151.utp.delete
+				,db.uat.msens.ms_codebook_VSS151.utp.select
+				,db.prod.msens.ms_codebook_VSS151.utp.insert
+				,db.uat.msens.ms_codebook_VSS150.utp.select
+				,db.prod.msens.ms_codebook_VSS150.utp.insert"/>
+			</RequestFlow>
+            <LogService Request="log.insertservicelog"/>
+        </Service>
+        <!-- 추가 끝 :: 금칙어 운영이관(210913) -->
+        
+        <!-- 추가:: STT전송파일삭제(220627) -->
+        <Service Id="SVC_COM_025" Runnable="true">
+            <Description>STT전송추출파일삭제(7일)</Description>
+            <RequestFlow>
+				<RequestGroup Value="msens.xcron.hansol.stttransferfile.delete.action"/>
+			</RequestFlow>
+            <LogService Request="log.insertservicelog"/>
+        </Service>
+        <!-- 추가:: 데이터 삭제 수동배치(221011) -->
+        
+        <!-- 추가:: 데이터 삭제 수동배치(221011) -->
+        <Service Id="SVC_COM_026" Runnable="true">
+            <Description>ms_stt_bef_meta 테이블 내 데이터 삭제</Description>
+            <RequestFlow>
+				<RequestGroup Value="db.msens.ms_stt_bef_meta.selete.manual,db.msens.ms_stt_bef_meta_del.insert.manual,db.msens.ms_stt_bef_meta.delete.manual"/>
+			</RequestFlow>
+			<Parameter>
+				<Field Name="fileid" Length="50"/>
+				<Field Name="ucid" Length="50"/>
+				<Field Name="tpano" Length="20"/>
+				<Field Name="from_date" Length="14"/>
+				<Field Name="to_date" Length="14"/>
+			</Parameter> 
+            <LogService Request="log.insertservicelog"/>
+        </Service>
+        
+        <Service Id="SVC_COM_027" Runnable="true">
+            <Description>ms_stt_meta 테이블 내 데이터 삭제</Description>
+            <RequestFlow>
+				<RequestGroup Value="db.msens.ms_stt_meta.select.manual,db.msens.ms_stt_meta_del.insert.manual,db.msens.ms_stt_meta.delete.manual"/>
+			</RequestFlow>
+			<Parameter>
+				<Field Name="ucid" Length="50"/>
+				<Field Name="con_ent_dgn_no" Length="14"/>
+				<Field Name="from_date" Length="14"/>
+				<Field Name="to_date" Length="14"/>
+			</Parameter> 
+            <LogService Request="log.insertservicelog"/>
+        </Service>
+        <!-- 추가 끝:: 데이터 삭제 수동배치(221011) -->
+		
+		<!-- 추가:: 배점 내역 등록/수정배치(260422) -->
+		<Service Id="SVC_COM_028" Runnable="true">
+			<Description>TM DB 배점내역 등록/수정</Description>
+            <RequestFlow>
+		    	<RequestGroup Value="db.msens.ms_regu_score.select,db.tm.tb_va_vrs_obsv_rslt.insert"/>
+				<RequestGroup Value="db.msens.ms_regu_score.select2,db.tm.tb_va_grade_rslt.update"/>
+            </RequestFlow>
+			<Parameter>
+				<Field Name="from_date" Length="14"/>
+				<Field Name="to_date" Length="14"/>
+			</Parameter>
+            <LogService Request="log.insertservicelog"/>
+    	</Service>
+		<!-- 추가 끝:: 배점 내역 등록/수정배치(260422) -->
         
         <Service Id="SVC_MS_001" Runnable="true">
             <Description>RealTime DB + AiGEN 정보 연동</Description>
@@ -403,6 +498,30 @@
 			</Parameter> 
             <LogService Request="log.insertservicelog"/>
         </Service>
+		
+        <Service Id="SVC_MS_009_1" Runnable="true">
+            <Description>미분석 VRS_S_FLAG 업데이트</Description>
+            <RequestFlow>
+				<RequestGroup Value="db.msens.ms_stt_meta_flages.update1"/>
+			</RequestFlow>
+			<Parameter>
+				<Field Name="from_date" Length="8"/>
+				<Field Name="to_date" Length="8"/>
+			</Parameter> 
+            <LogService Request="log.insertservicelog"/>
+        </Service>	
+		
+		<Service Id="SVC_MS_009_2" Runnable="true">
+            <Description>미분석 MS_STT_BEF_META VA_FLAG 업데이트</Description>
+            <RequestFlow>
+				<RequestGroup Value="db.msens.ms_stt_meta_flages.update2"/>
+			</RequestFlow>
+			<Parameter>
+				<Field Name="from_date" Length="8"/>
+				<Field Name="to_date" Length="8"/>
+			</Parameter> 
+            <LogService Request="log.insertservicelog"/>
+        </Service>	
         
      <!--   <Service Id="SVC_MS_009" Runnable="true">
             <Description>dashboard 조회</Description>
@@ -507,8 +626,52 @@
 				<RequestGroup Value="msens.xcron.hansol.mrLsListWebAction"/>
 			</RequestFlow>
             <LogService Request="log.insertservicelog"/>
-        </Service>		
-  
+        </Service>	
+        
+        <Service Id="SVC_MS_018" Runnable="true">
+            <Description>Grade 재분석</Description>
+            <RequestFlow>
+				<RequestGroup Value="msens.xcron.hansol.gradeReanalysisWebAction"/>
+			</RequestFlow>
+            <LogService Request="log.insertservicelog"/>
+        </Service>	
+        
+     <!--    <Service Id="SVC_MS_019" Runnable="true">
+            <Description>STT 추출 및 sftp 전송</Description>
+            <RequestFlow>
+				<RequestGroup Value="msens.xcron.hansol.SttTransferWebAction"/>
+			</RequestFlow>
+            <LogService Request="log.insertservicelog"/>
+        </Service>	-->
+         <Service Id="SVC_MS_019" Runnable="true">
+            <Description>STT 추출 및 sftp 전송</Description>
+            <RequestFlow>
+				<RequestGroup Value="msens.xcron.hansol.SttTransferWebAction"/>
+			</RequestFlow>
+			<Parameter>
+				<Field Name="from_date" Length="8"/>
+				<Field Name="to_date" Length="8"/>
+				<Field Name="cmd" Length="6"/>				
+			</Parameter>
+            <LogService Request="log.insertservicelog"/>
+        </Service>			
+        
+        <Service Id="SVC_MS_019_1" Runnable="true">
+            <Description>STT 추출 및 sftp 전송(과거 콜 분석용)</Description>
+            <RequestFlow>
+				<RequestGroup Value="msens.xcron.hansol.SttTransferBefWebAction"/>
+			</RequestFlow>
+            <LogService Request="log.insertservicelog"/>
+        </Service>
+        
+        <Service Id="SVC_MS_021" Runnable="true">
+            <Description>재가입 건 STT 분석 여부 TM 연계</Description>
+            <RequestFlow>
+				<RequestGroup Value="msens.xcron.hansol.ReInfoSttWebAction"/>
+			</RequestFlow>
+            <LogService Request="log.insertservicelog"/>
+        </Service>
+        
    </ServiceDefinition>
    
    
@@ -971,9 +1134,10 @@
 							
 							String from_date = params.getValue("#PARAM").getString("from_date");
 							String to_date = params.getValue("#PARAM").getString("to_date");
+							String chnl_clcd = params.getValue("#PARAM").getString("chnl_clcd");
 							//if(from_date.equals("")) from_date = "";
 							//파라미터 안보내면 어제꺼 작업함.
-							sUrl += "?from_date=" + from_date + "&to_date=" + to_date;
+							sUrl += "?from_date=" + from_date + "&to_date=" + to_date +"&chnl_clcd=" + chnl_clcd;
 							
 							URL url = new URL(sUrl);
 							URLConnection urlConnection = url.openConnection();
@@ -1014,8 +1178,49 @@
 								
 							String from_date = params.getValue("#PARAM").getString("from_date");
 							String to_date = params.getValue("#PARAM").getString("to_date");
-							sUrl += "?from_date=" + from_date + "&to_date=" + to_date;
+							String chnl_clcd = params.getValue("#PARAM").getString("chnl_clcd");
+							sUrl += "?from_date=" + from_date + "&to_date=" + to_date + "&chnl_clcd=" + chnl_clcd;
 	
+							URL url = new URL(sUrl);
+							URLConnection urlConnection = url.openConnection();
+							            
+							BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+							
+							String inputLine = "";
+										
+							while ((inputLine = in.readLine()) != null) { 
+								System.out.println(inputLine);
+							}
+							
+							in.close();
+						} catch(Exception e) {
+							Logger.error(e.getMessage(), e);
+						}
+			   
+                	]]></Initialize>
+				</UserHandlerScript>
+        </RequestService>
+        
+        <RequestService Id="msens.xcron.hansol.splitkindWebaction">
+            <Description>msens.xcron.hansol.splitkindWebaction</Description>
+				<UserHandlerScript>
+                	<Initialize><![CDATA[
+                	
+						import java.io.BufferedReader;
+						import java.io.InputStreamReader;
+						import java.net.URL;
+						import java.net.URLConnection;
+						import com.inticube.xcron.logs.Logger;
+						import java.net.InetAddress;
+						
+						try {
+							String serverIp = InetAddress.getLocalHost().getHostAddress();
+							String sUrl = "http://"+serverIp+":8080/msens/msens.xcron.hansol.splitKindWebaction.do";
+							//String sUrl = "http://10.48.241.41:8080/msens/msens.xcron.hansol.splitKindWebaction.do";
+							
+							String chnl_clcd = params.getValue("#PARAM").getString("chnl_clcd");
+							sUrl += "?chnl_clcd=" + chnl_clcd ;
+							
 							URL url = new URL(sUrl);
 							URLConnection urlConnection = url.openConnection();
 							            
@@ -1893,6 +2098,68 @@
                 ]]></Default>
             </CaseQuery>
         </RequestService>
+		
+		<RequestService Id="db.tm.tb_codebook_EST312.select" DataSource="tmdatasource">
+            <Description>db.tm.tb_codebook_EST312.select</Description>
+            <ResultName>TB_CODEBOOK</ResultName>
+	    			<Query><![CDATA[
+
+					SELECT CODETYPE AS CODE_TYPE,
+                                              CODE AS CODE_ID,
+                                              CODENAME AS CODE_NAME,
+                                              NVL(ETCCODE1,' ') AS ETC1,
+                                              NVL(ETCCODE2,' ') AS ETC2,
+                                              NVL(ETCCODE3,' ') AS ETC3,
+                                              NVL(ETCCODE4,' ') AS ETC4,
+                                              NVL(SORTKEY, 0) AS SORT_KEY
+                                        FROM TSOWN.TB_CODEBOOK
+                                        WHERE CODETYPE IN ('EST312')
+					AND CODE <> '000000'
+
+            ]]></Query>
+		</RequestService>
+		
+		<RequestService Id="db.msens.ms_codebook_EST312.insert" DataSource="msensdatasource">
+            <Description>db.msens.ms_codebook_EST312.insert</Description>
+            <BatchName>TB_CODEBOOK</BatchName>
+                                <Query><![CDATA[
+                                        MERGE ms_codebook AS A
+                                        USING (SELECT 'X' AS DUAL) AS B
+                                        ON ( CODE_TYPE = ?CODE_TYPE AND CODE_ID = ?CODE_ID)
+                                        WHEN MATCHED THEN
+                                                UPDATE SET
+                                                        CODE_NAME = ?CODE_NAME,
+                                                        ETC1 = ?ETC1,
+                                                        ETC2 = ?ETC2,
+                                                        ETC3 = ?ETC3,
+                                                        ETC4 = ?ETC4,
+                                                        SORT_KEY = CASE WHEN ?SORT_KEY = 0 THEN NULL ELSE CONVERT(VARCHAR, ?SORT_KEY) END
+                                        WHEN NOT MATCHED THEN
+                                                INSERT(
+                                                            CODE_TYPE
+                                                           ,CODE_ID
+                                                           ,CODE_NAME
+                                                           ,ETC1
+                                                           ,ETC2
+                                                           ,ETC3
+                                                           ,ETC4
+                                                           ,USE_YN
+                                                           ,SORT_KEY
+                                                )
+                                                VALUES (
+                                                            ?CODE_TYPE
+                                                           ,?CODE_ID
+                                                           ,?CODE_NAME
+                                                           ,?ETC1
+                                                           ,?ETC2
+                                                           ,?ETC3
+                                                           ,?ETC4
+                                                           ,'Y'
+                                                           ,CASE WHEN ?SORT_KEY = 0 THEN NULL ELSE CONVERT(VARCHAR, ?SORT_KEY) END
+                                                );
+
+            ]]></Query>
+        </RequestService>
         
         <RequestService Id="db.msens.ms_usermaster_batch.insert" DataSource="msensdatasource">
             <Description>db.msens.ms_usermaster_batch.insert</Description>
@@ -2189,6 +2456,7 @@
         <RequestService Id="db.tm.tb_sc_code_mng.select" DataSource="tmdatasource">
             <Description>db.tm.tb_sc_code_mng.select</Description>
             <ResultName>TB_SC_CODE_MNG</ResultName>
+            <Parameter>#param</Parameter>
 				<Query><![CDATA[
 				
 					SELECT SC_CD,
@@ -2199,13 +2467,32 @@
 					       RGTR_CRNO,
 					       REGN_DT AS REGN_DT,
 					       UPDR_CRNO,
-					       ALTR_DT AS ALTR_DT
+					       ALTR_DT AS ALTR_DT,
+					       NVL(TTS_USE_YN, ' ') AS TTS_USE_YN,
+					       NVL(VA_ESSN_YN, ' ') AS VA_ESSN_YN,
+						   NVL(COMM_YN, ' ') AS COMM_YN
 					FROM TSOWN.TB_SC_CODE_MNG
 					WHERE 1=1
-					AND USE_YN = 'Y'
-					AND ( TO_CHAR(SYSDATE-1, 'YYYYMMDD') - TO_CHAR(ALTR_DT, 'YYYYMMDD') =0 OR TO_CHAR(SYSDATE-1, 'YYYYMMDD') - TO_CHAR(REGN_DT, 'YYYYMMDD') =0 )
-				   
+					AND USE_YN = 'Y' 
+					AND (TO_CHAR(ALTR_DT,'YYYYMMDD')  BETWEEN ?from_date AND ?to_date OR TO_CHAR(REGN_DT,'YYYYMMDD')  BETWEEN ?from_date AND ?to_date )
+					
             ]]></Query>
+            <CaseQuery Id="from_date">
+                <Case Expr='isEmpty("?from_date")'><![CDATA[ 
+						TO_CHAR(SYSDATE-1,'YYYYMMDD')
+                ]]></Case>
+                <Default><![CDATA[  
+						?from_date
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="to_date">
+                <Case Expr='isEmpty("?to_date")'><![CDATA[ 
+						TO_CHAR(SYSDATE,'YYYYMMDD')
+                ]]></Case>
+                <Default><![CDATA[  
+						?to_date
+                ]]></Default>
+            </CaseQuery>
         </RequestService>
         
         <RequestService Id="db.msens.tb_sc_code_mng.insert" DataSource="msensdatasource">
@@ -2221,11 +2508,13 @@
 						TYPE_CD = ?TYPE_CD,
 						UPR_SC_CD = ?UPR_SC_CD,
 						USE_YN = ?USE_YN,
-						DUAL_YN = ?DUAL_YN,
 						RGTR_CRNO = ?RGTR_CRNO,
 						REGN_DT = format(?REGN_DT,'yyyyMMdd'),
 						UPDR_CRNO = ?UPDR_CRNO,
-						ALTR_DT = format(?ALTR_DT,'yyyyMMdd') 
+						ALTR_DT = format(?ALTR_DT,'yyyyMMdd'),
+					    TTS_USE_YN = ?TTS_USE_YN,
+					    VA_ESSN_YN = ?VA_ESSN_YN,	
+					        COMM_YN = ?COMM_YN		
 					WHEN NOT MATCHED THEN
 						INSERT(
 							   SC_CD
@@ -2233,11 +2522,13 @@
 							  ,TYPE_CD
 							  ,UPR_SC_CD
 							  ,USE_YN
-							  ,DUAL_YN
 							  ,RGTR_CRNO
 							  ,REGN_DT
 							  ,UPDR_CRNO
 							  ,ALTR_DT
+							  ,TTS_USE_YN
+							  ,VA_ESSN_YN
+							  ,COMM_YN							  
 						)
 						VALUES ( 
 							   ?SC_CD
@@ -2245,21 +2536,305 @@
 							  ,?TYPE_CD
 							  ,?UPR_SC_CD
 							  ,?USE_YN
-							  ,?DUAL_YN
 							  ,?RGTR_CRNO
-							  ,format(?REGN_DT,'yyyyMMdd') 
+							  ,format(?REGN_DT,'yyyyMMdd')
 							  ,?UPDR_CRNO
-							  ,format(?ALTR_DT,'yyyyMMdd') 
+							  ,format(?ALTR_DT,'yyyyMMdd')
+							  ,?TTS_USE_YN
+							  ,?VA_ESSN_YN
+							  ,?COMM_YN 							  
 						);
 			
+            ]]></Query>
+        </RequestService>
+		
+		<RequestService Id="db.msens.ms_regu_score.select" DataSource="msensdatasource">
+            <Description>db.msens.ms_regu_score.select</Description>
+            <ResultName>TB_VA_VRS_OBSV_RSLT</ResultName>
+            <Parameter>#param</Parameter>
+                                <Query><![CDATA[
+					SELECT      
+							ENTR_DSGN_NO,
+							VRS_ITCD,
+							VRS_OBSV_BART,
+							round(VRS_OBSV_RATE,2,1) as VRS_OBSV_RATE,
+							CASE WHEN VRS_OBSV_RATE >= VRS_OBSV_BART THEN SCORE2 ELSE 0 END AS VRS_ITCD_SCOR
+									
+					FROM (
+
+							SELECT  
+								Q.ENTR_DSGN_NO,
+								Q.VRS_ITCD,
+								MAX(Q.VRS_OBSV_BART) AS VRS_OBSV_BART,
+								MAX(Q.SCORE2) AS SCORE2,
+								SUM(Q.VRS_OBSV_RATE)/COUNT(Q.QST_CD) AS VRS_OBSV_RATE
+							FROM (
+
+
+								SELECT
+									A.CON_ENT_DGN_NO as ENTR_DSGN_NO,
+									A.SC_SCLF_CD as VRS_ITCD,
+									A.QST_CD ,
+									A.SCRIPT_SENT_ID,
+									MAX(B.ETC1) AS VRS_OBSV_BART,
+									MAX(B.ETC2) AS SCORE2,
+									MAX(A.SENT_SCORE) AS VRS_OBSV_RATE
+								FROM (
+									SELECT
+										 CON_ENT_DGN_NO
+										,CNTR_CD
+										,SC_LCLF_CD
+										,SC_SCLF_CD
+										,QST_CD
+										,SCRIPT_SENT_ID
+										,CTRA_INSA_CLCD
+										,SENT_SCORE
+										,TA_SCORE
+										, CHG_DATE
+									FROM ms_regu_score r  WITH(NOLOCK)	--문장 준수한 테이블
+
+									UNION
+									SELECT
+										 R.CON_ENT_DGN_NO
+										,R.CNTR_CD
+										,R.SC_LCLF_CD
+										,R.SC_SCLF_CD
+										,R.QST_CD
+										,R.SCRIPT_SENT_ID
+										,R.CTRA_INSA_CLCD
+										,0 SENT_SCORE
+										,0 TA_SCORE
+										,R.CHG_DATE
+									FROM MS_REGU_OMIT R	 WITH(NOLOCK)	   --누락한 문장들 테이블
+
+								) A  
+								INNER JOIN (
+									SELECT C.CODE_ID, C.ETC1, C.ETC2, D.VA_ESSN_YN FROM ms_codebook C WITH(NOLOCK) 
+										  LEFT OUTER JOIN tb_sc_code_mng D WITH(NOLOCK) ON C.CODE_ID = D.SC_CD where C.CODE_TYPE = 'EST312'
+								) B
+								ON A.SC_SCLF_CD = B.CODE_ID				
+								, ms_script_sent X WITH(NOLOCK)	
+								WHERE A.CHG_DATE BETWEEN ?from_date AND ?to_date
+								AND B.VA_ESSN_YN = 'Y'
+
+								AND A.SC_LCLF_CD = X.SC_LCLF_CD
+								AND A.SC_SCLF_CD = X.SC_SCLF_CD
+								AND A.QST_CD = X.QST_CD
+								AND A.SCRIPT_SENT_ID = X.SCRIPT_SENT_ID
+								AND A.CNTR_CD = X.CNTR_CD
+								AND (X.EXCEPT_YN = 'N' OR X.EXCEPT_YN IS NULL)
+								AND X.DEL_YN='N'	
+	
+								GROUP by  A.CON_ENT_DGN_NO, A.SC_SCLF_CD, A.QST_CD ,A.SCRIPT_SENT_ID
+
+							) Q
+
+							GROUP by  ENTR_DSGN_NO, VRS_ITCD
+
+					)  V
+
+					WHERE  1=1
+
+					ORDER BY ENTR_DSGN_NO, VRS_ITCD 
+            ]]></Query>
+            <CaseQuery Id="from_date">
+		    <Case Expr='isEmpty("?from_date")'><![CDATA[
+					Convert(varchar(8),DATEADD(HOUR,-1,GETDATE()),112)+Convert(varchar(2),DATEADD(HOUR,-1,GETDATE()),108)+ '0000'
+                ]]></Case>
+                <Default><![CDATA[
+                                                ?from_date
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="to_date">
+		    <Case Expr='isEmpty("?to_date")'><![CDATA[
+			    			Convert(varchar(8),getdate(),112)+Convert(varchar(2),getdate(),108) + '0000'
+                ]]></Case>
+                <Default><![CDATA[
+                                                ?to_date
+                ]]></Default>
+            </CaseQuery>
+        </RequestService>
+
+
+		<RequestService Id="db.tm.tb_va_vrs_obsv_rslt.insert" DataSource="tmdatasource">
+            <Description>db.tm.tb_va_vrs_obsv_rslt.insert</Description>
+            <BatchName>TB_VA_VRS_OBSV_RSLT</BatchName>
+	    			<Query><![CDATA[
+
+					MERGE INTO TSOWN.TB_VA_VRS_OBSV_RSLT
+                                        USING DUAL
+                                        ON (ENTR_DSGN_NO = ?ENTR_DSGN_NO AND VRS_ITCD = ?VRS_ITCD)
+                                        WHEN MATCHED THEN
+                                                UPDATE SET
+                                                        VRS_OBSV_BART = ?VRS_OBSV_BART
+                                                        ,VRS_OBSV_RATE = ?VRS_OBSV_RATE
+                                                        ,VRS_ITCD_SCOR = ?VRS_ITCD_SCOR
+                                                        ,ALTR_DTM = SYSDATE
+                                                        ,UPDR_ID = 'VA'
+						WHERE NOT EXISTS (
+							SELECT 1
+							FROM TSOWN.TB_IVST_MTHD_HIST H
+							WHERE H.ENT_DGN_NO = ?ENTR_DSGN_NO
+						)
+                                        WHEN NOT MATCHED THEN
+                                                INSERT (
+                                                        ENTR_DSGN_NO
+                                                        ,VRS_ITCD
+                                                        ,VRS_OBSV_BART
+                                                        ,VRS_OBSV_RATE
+                                                        ,VRS_ITCD_SCOR
+                                                        ,REGN_DTM
+                                                        ,RGTR_ID
+                                                ) VALUES (
+                                                        ?ENTR_DSGN_NO
+                                                        ,?VRS_ITCD
+                                                        ,?VRS_OBSV_BART
+                                                        ,?VRS_OBSV_RATE
+                                                        ,?VRS_ITCD_SCOR
+                                                        ,SYSDATE
+                                                        ,'VA'
+                                                )
+                                                WHERE NOT EXISTS (
+							SELECT 1
+							FROM TSOWN.TB_IVST_MTHD_HIST H
+							WHERE H.ENT_DGN_NO = ?ENTR_DSGN_NO
+						)
+
+            ]]></Query>
+		</RequestService>
+
+		<RequestService Id="db.msens.ms_regu_score.select2" DataSource="msensdatasource">
+            <Description>db.msens.ms_regu_score.select2</Description>
+            <ResultName>TB_VA_GRADE_RSLT</ResultName>
+            <Parameter>#param</Parameter>
+                                <Query><![CDATA[
+													
+					SELECT      
+							ENTR_DSGN_NO,
+							SUM(CASE WHEN VRS_OBSV_RATE >= VRS_OBSV_BART THEN SCORE2 ELSE 0 END) AS VRS_CNVR_SCOR
+									
+					FROM (
+
+							SELECT  
+								Q.ENTR_DSGN_NO,
+								Q.VRS_ITCD,
+								MAX(Q.VRS_OBSV_BART) AS VRS_OBSV_BART,
+								MAX(Q.SCORE2) AS SCORE2,
+								SUM(Q.VRS_OBSV_RATE)/COUNT(Q.QST_CD) AS VRS_OBSV_RATE
+							FROM (
+
+
+								SELECT
+									A.CON_ENT_DGN_NO as ENTR_DSGN_NO,
+									A.SC_SCLF_CD as VRS_ITCD,
+									A.QST_CD ,
+									A.SCRIPT_SENT_ID,
+									MAX(B.ETC1) AS VRS_OBSV_BART,
+									MAX(B.ETC2) AS SCORE2,
+									MAX(A.SENT_SCORE) AS VRS_OBSV_RATE
+								FROM (
+									SELECT
+										 CON_ENT_DGN_NO
+										,CNTR_CD
+										,SC_LCLF_CD
+										,SC_SCLF_CD
+										,QST_CD
+										,SCRIPT_SENT_ID
+										,CTRA_INSA_CLCD
+										,SENT_SCORE
+										,TA_SCORE
+										, CHG_DATE
+									FROM ms_regu_score r  WITH(NOLOCK)	--문장 준수한 테이블
+
+									UNION
+									SELECT
+										 R.CON_ENT_DGN_NO
+										,R.CNTR_CD
+										,R.SC_LCLF_CD
+										,R.SC_SCLF_CD
+										,R.QST_CD
+										,R.SCRIPT_SENT_ID
+										,R.CTRA_INSA_CLCD
+										,0 SENT_SCORE
+										,0 TA_SCORE
+										,R.CHG_DATE
+									FROM MS_REGU_OMIT R	 WITH(NOLOCK)	   --누락한 문장들 테이블
+
+								) A  
+								INNER JOIN (
+									SELECT C.CODE_ID, C.ETC1, C.ETC2, D.VA_ESSN_YN FROM ms_codebook C WITH(NOLOCK) 
+										  LEFT OUTER JOIN tb_sc_code_mng D WITH(NOLOCK) ON C.CODE_ID = D.SC_CD where C.CODE_TYPE = 'EST312'
+								) B
+								ON A.SC_SCLF_CD = B.CODE_ID				
+								, ms_script_sent X WITH(NOLOCK)	
+								WHERE A.CHG_DATE BETWEEN ?from_date AND ?to_date
+								AND B.VA_ESSN_YN = 'Y'
+
+								AND A.SC_LCLF_CD = X.SC_LCLF_CD
+								AND A.SC_SCLF_CD = X.SC_SCLF_CD
+								AND A.QST_CD = X.QST_CD
+								AND A.SCRIPT_SENT_ID = X.SCRIPT_SENT_ID
+								AND A.CNTR_CD = X.CNTR_CD
+								AND (X.EXCEPT_YN = 'N' OR X.EXCEPT_YN IS NULL)
+								AND X.DEL_YN='N'	
+	
+								GROUP by  A.CON_ENT_DGN_NO, A.SC_SCLF_CD, A.QST_CD ,	  A.SCRIPT_SENT_ID
+
+							) Q
+
+							GROUP by  ENTR_DSGN_NO, VRS_ITCD
+
+					)  V
+
+					WHERE  1=1
+
+					GROUP BY ENTR_DSGN_NO
+					
+            ]]></Query>
+            <CaseQuery Id="from_date">
+                    <Case Expr='isEmpty("?from_date")'><![CDATA[
+
+					Convert(varchar(8),DATEADD(HOUR,-1,GETDATE()),112)+Convert(varchar(2),DATEADD(HOUR,-1,GETDATE()),108)+ '0000'
+
+                ]]></Case>
+                <Default><![CDATA[
+                                                ?from_date
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="to_date">
+                    <Case Expr='isEmpty("?to_date")'><![CDATA[
+                                                Convert(varchar(8),getdate(),112)+Convert(varchar(2),getdate(),108) + '0000'
+                ]]></Case>
+                <Default><![CDATA[
+                                                ?to_date
+		]]></Default>
+            </CaseQuery>
+        </RequestService>
+
+		<RequestService Id="db.tm.tb_va_grade_rslt.update" DataSource="tmdatasource">
+            <Description>db.tm.tb_va_grade_rslt.update</Description>
+            <BatchName>TB_VA_GRADE_RSLT</BatchName>
+                                <Query><![CDATA[
+
+					UPDATE TSOWN.TB_VA_GRADE_RSLT SET
+						VRS_CNVR_SCOR = ?VRS_CNVR_SCOR,
+						ALTR_DTM = SYSDATE,
+						UPDR_ID = 'VA'
+					WHERE ENTR_DSGN_NO = ?ENTR_DSGN_NO
+					AND NOT EXISTS (
+							SELECT 1 
+							FROM TSOWN.TB_IVST_MTHD_HIST H 
+							WHERE H.ENT_DGN_NO = ?ENTR_DSGN_NO
+							)
+
             ]]></Query>
         </RequestService>
          
          <RequestService Id="db.tm.tb_sc_mng.select" DataSource="tmdatasource">
             <Description>db.tm.tb_sc_mng.select</Description>
             <ResultName>TB_SC_MNG</ResultName>
+            <Parameter>#param</Parameter>
 				<Query><![CDATA[
-				
 					SELECT M.SC_SNO,
 					       M.PROD_CD,
 					       M.CTRA_INSA_CLCD,
@@ -2271,14 +2846,40 @@
 					       M.RGTR_CRNO,
 					       M.REGN_DT,
 					       M.UPDR_CRNO,
-					       M.ALTR_DT
+					       M.ALTR_DT,
+					       M.CHNL_CLCD
 					FROM TSOWN.TB_SC_MNG M ,TSOWN.TB_PROD_ATTR_MNG P
 					WHERE M.PROD_CD = P.PROD_CD
+					AND M.CHNL_CLCD = P.CHNL_CLCD
 					AND M.USE_YN = 'Y' 
 					AND P.USE_YN = 'Y'
-					AND ( TO_CHAR(SYSDATE-1, 'YYYYMMDD') - TO_CHAR(M.ALTR_DT, 'YYYYMMDD') = 0 OR TO_CHAR(SYSDATE-1, 'YYYYMMDD') - TO_CHAR(M.REGN_DT, 'YYYYMMDD') = 0 )
-				   
+					AND (M.ALTR_DT BETWEEN ?from_date AND ?to_date OR M.REGN_DT BETWEEN ?from_date AND ?to_date )
+					 ?chnl_clcd
             ]]></Query>
+            <CaseQuery Id="from_date">
+                <Case Expr='isEmpty("?from_date")'><![CDATA[ 
+						TO_CHAR(SYSDATE-1,'YYYYMMDD')
+                ]]></Case>
+                <Default><![CDATA[  
+						?from_date
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="to_date">
+                <Case Expr='isEmpty("?to_date")'><![CDATA[ 
+						TO_CHAR(SYSDATE,'YYYYMMDD')
+                ]]></Case>
+                <Default><![CDATA[  
+						?to_date
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="chnl_clcd">
+                <Case Expr='isEmpty("?chnl_clcd")'><![CDATA[ 
+						AND M.CHNL_CLCD in ('TM', 'GA')
+                ]]></Case>
+                <Default><![CDATA[  
+						AND M.CHNL_CLCD = ?chnl_clcd
+                ]]></Default>
+            </CaseQuery>
         </RequestService>
         
         <RequestService Id="db.msens.tb_sc_mng.insert" DataSource="msensdatasource">
@@ -2292,6 +2893,7 @@
 						 AND CTRA_INSA_CLCD = ?CTRA_INSA_CLCD 
 						 AND SC_LCLF_CD = ?SC_LCLF_CD 
 						 AND HIST_VER = ?HIST_VER
+						 AND CHNL_CLCD = ?CHNL_CLCD
 						)
 					WHEN MATCHED THEN
 						UPDATE SET 
@@ -2316,6 +2918,7 @@
 							  ,REGN_DT
 							  ,UPDR_CRNO
 							  ,ALTR_DT
+							  ,CHNL_CLCD
 						)
 						VALUES ( 
 							   ?SC_SNO
@@ -2330,6 +2933,7 @@
 							  ,format(?REGN_DT,'yyyyMMdd') 
 							  ,?UPDR_CRNO
 							  ,format(?ALTR_DT,'yyyyMMdd') 
+							  ,?CHNL_CLCD
 						);
 			
             ]]></Query>
@@ -2338,9 +2942,11 @@
         <RequestService Id="db.tm.tb_codebook_SYS119.select" DataSource="tmdatasource">
             <Description>db.tm.tb_codebook_SYS119.select</Description>
             <ResultName>TB_CODEBOOK</ResultName>
+            <Parameter>#param</Parameter>
 				<Query><![CDATA[
-				
-					SELECT CASE CODETYPE WHEN 'SYS119' THEN 'SYS105'
+					SELECT CASE CODETYPE
+							WHEN 'SYS061' THEN 'SYS104' -- GA
+							WHEN 'SYS119' THEN 'SYS105' -- TM
 					      END AS CODE_TYPE,
 					      CODE AS CODE_ID,
 					      CODENAME AS CODE_NAME,
@@ -2350,10 +2956,17 @@
 					      NVL(ETCCODE4,' ') AS ETC4,
 					      NVL(SORTKEY, 0) AS SORT_KEY
 					FROM TSOWN.TB_CODEBOOK
-					WHERE CODETYPE IN ('SYS119')
+					?chnl_clcd
 					AND CODE <> '000000'
-				   
             ]]></Query>
+            <CaseQuery Id="chnl_clcd">
+                <Case Expr='isEmpty("?chnl_clcd")'><![CDATA[ 
+						WHERE CODETYPE IN ('SYS061','SYS119') 
+                ]]></Case>
+                <Default><![CDATA[  
+						WHERE CODETYPE = (CASE WHEN ?chnl_clcd = 'TM' THEN 'SYS119' ELSE 'SYS061' END) 
+                ]]></Default>
+            </CaseQuery>
         </RequestService>
         
         <RequestService Id="db.msens.ms_codebook_SYS105.insert" DataSource="msensdatasource">
@@ -2398,16 +3011,25 @@
             ]]></Query>
         </RequestService>
         
-        
-         <RequestService Id="db.msens.tb_qst_kind_mng.delete" DataSource="msensdatasource">
+        <RequestService Id="db.msens.tb_qst_kind_mng.delete" DataSource="msensdatasource">
             <Description>db.msens.tb_qst_kind_mng.delete</Description>
+            <Parameter>#param</Parameter>
             <Query><![CDATA[ 
 				DELETE FROM tb_qst_kind_mng
             ]]></Query>
+            <CaseQuery Id="chnl_clcd">
+                <Case Expr='isEmpty("?chnl_clcd")'><![CDATA[ 
+						WHERE CHNL_CLCD in ('TM','GA') 
+                ]]></Case>
+                <Default><![CDATA[  
+						WHERE CHNL_CLCD = ?chnl_clcd 
+                ]]></Default>
+            </CaseQuery>
         </RequestService>
          
          <RequestService Id="db.tm.tb_qst_kind_mng.select" DataSource="tmdatasource">
             <Description>db.tm.tb_qst_kind_mng.select</Description>
+            <Parameter>#param</Parameter>
             <ResultName>TB_QST_KIND_MNG</ResultName>
 				<Query><![CDATA[
 				
@@ -2415,7 +3037,8 @@
 					       CNTR_CD,
 					       QST_KIND_CD,
 					       QST_COND,
-					       REGN_DT
+					       REGN_DT,
+					       CHNL_CLCD
 					FROM TSOWN.TB_QST_KIND_MNG
 					WHERE QST_CD IN (
 					    SELECT QST_CD
@@ -2425,8 +3048,16 @@
 					    AND B.PROD_CD = C.PROD_CD
 					    AND M.DEL_YN = 'N' AND B.USE_YN = 'Y' AND C.USE_YN = 'Y'
 					)
-				   
+				   ?chnl_clcd
             ]]></Query>
+            <CaseQuery Id="chnl_clcd">
+                <Case Expr='isEmpty("?chnl_clcd")'><![CDATA[ 
+						AND CHNL_CLCD in ('TM','GA')
+                ]]></Case>
+                <Default><![CDATA[  
+						AND CHNL_CLCD = ?chnl_clcd 
+                ]]></Default>
+            </CaseQuery>
         </RequestService>
         
         <RequestService Id="db.msens.tb_qst_kind_mng.insert" DataSource="msensdatasource">
@@ -2440,6 +3071,7 @@
 					           ,QST_KIND_CD
 					           ,QST_COND
 					           ,REGN_DT
+					           ,CHNL_CLCD
 							  )
 				     VALUES(
 							?QST_CD
@@ -2447,20 +3079,22 @@
 				           ,?QST_KIND_CD
 				           ,?QST_COND
 				           ,format(?REGN_DT,'yyyyMMdd')
+				           ,?CHNL_CLCD
 					 )
             ]]></Query>
         </RequestService>
         
+       
          <RequestService Id="db.tm.tbia101.select" DataSource="tmdatasource">
             <Description>db.tm.tbia101.select</Description>
             <ResultName>TBIA101</ResultName>
 				<Query><![CDATA[
-				
 					SELECT ITEM_CD AS PROD_CD,
 					       ITEM_NAME AS PROD_NM,
 					       CASE WHEN SUBSTR(SAED_DATE, 5,1) NOT IN ('0', '1') AND TRUNC(MONTHS_BETWEEN(TO_DATE(SUBSTR(SAED_DATE,0,4) || '12', 'YYYYMM'),SYSDATE),0) >= 0 THEN 'Y'
 					            WHEN SUBSTR(SAED_DATE, 5,1) IN ('0', '1') AND TRUNC(MONTHS_BETWEEN(TO_DATE(SUBSTR(SAED_DATE,0,6), 'YYYYMM'),SYSDATE),0) >= 0 THEN 'Y'
-					            ELSE 'N' END USE_YN
+					            ELSE 'N' END USE_YN,
+					       (ENTY_DATE || '000000') AS REG_DATE
 					FROM TSOWN.TBIA101
 					WHERE 1=1
 					-- AND ENTY_DATE BETWEEN TO_CHAR(SYSDATE-4,'YYYYMMDD') AND TO_CHAR(SYSDATE-1,'YYYYMMDD')
@@ -2479,17 +3113,20 @@
 						UPDATE SET 
 						PROD_NM = ?PROD_NM,
 						USE_YN = ?USE_YN,
+						REG_DATE = ?REG_DATE,
 						CHG_DATE = (format(getdate(),'yyyyMMddHHmmss'))
 					WHEN NOT MATCHED THEN
 						INSERT(
 							   PROD_CD
 							   ,PROD_NM
 							   ,USE_YN
+							   ,REG_DATE
 						)
 						VALUES ( 
 							    ?PROD_CD
 							   ,?PROD_NM
 							   ,?USE_YN
+							   ,?REG_DATE
 						);
 			
             ]]></Query>
@@ -2731,6 +3368,64 @@
                 ]]></Default>
             </CaseQuery>
         </RequestService>
+		
+      
+        <RequestService Id="db.msens.ms_stt_meta_flages.update1" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_meta_flages.update1</Description>
+            <Parameter>#param</Parameter>
+				<Query><![CDATA[
+					UPDATE ms_stt_meta
+					SET VRS_S_FLAG = 'N'
+					WHERE GRD_FLAG = 'N'
+					AND TA_FLAG = 'Y'
+					AND VRS_S_FLAG = 'S'
+					AND REG_DATE BETWEEN ?from_date AND ?to_date
+            ]]></Query>
+			<CaseQuery Id="from_date">
+                <Case Expr='isEmpty("?from_date")'><![CDATA[ 
+						CONVERT(VARCHAR,FORMAT(GETDATE()-1, 'yyyyMMdd'))+'080000'
+                ]]></Case>
+                <Default><![CDATA[  
+						?from_date+'080000'
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="to_date">
+                <Case Expr='isEmpty("?to_date")'><![CDATA[ 
+						CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'080000'
+                ]]></Case>
+                <Default><![CDATA[  
+						?to_date + '080000'
+                ]]></Default>
+            </CaseQuery>
+        </RequestService>		
+		
+     
+        <RequestService Id="db.msens.ms_stt_meta_flages.update2" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_meta_flages.update2</Description>
+            <Parameter>#param</Parameter>
+				<Query><![CDATA[
+					UPDATE MS_STT_BEF_META
+					SET  VA_FLAG = 'N'
+					WHERE VA_FLAG = 'S'
+					AND REG_DATE BETWEEN ?from_date AND ?to_date
+            ]]></Query>
+			<CaseQuery Id="from_date">
+                <Case Expr='isEmpty("?from_date")'><![CDATA[ 
+						CONVERT(VARCHAR,FORMAT(GETDATE()-1, 'yyyyMMdd'))+'080000'
+                ]]></Case>
+                <Default><![CDATA[  
+						?from_date+'080000'
+                ]]></Default>
+            </CaseQuery>
+            <CaseQuery Id="to_date">
+                <Case Expr='isEmpty("?to_date")'><![CDATA[ 
+						CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'080000'
+                ]]></Case>
+                <Default><![CDATA[  
+						?to_date + '080000'
+                ]]></Default>
+            </CaseQuery>
+        </RequestService>			
 		
 		<RequestService Id="db.tm.tb_insu_plan_mast.ass_user.select" DataSource="tmdatasource">
             <Description>db.tm.tb_insu_plan_mast.ass_user.select</Description>
@@ -3124,7 +3819,7 @@
 						
 						try {
 						
-							String command = "/sw/msens/MSENS_OB/webapps/temp/file_delete.sh";
+							String command = "/sw/msens/MSENS_OB/XCron/temp/file_delete.sh";
 							
 							Runtime runtime = Runtime.getRuntime();
 							Process process = runtime.exec(command);
@@ -3146,7 +3841,7 @@
 						
 						try {
 						
-							String command = "/sw/msens/MSENS_OB/webapps/temp/log_delete.sh";
+							String command = "/sw/msens/va_src/msens/temp/log_delete.sh";
 							
 							Runtime runtime = Runtime.getRuntime();
 							Process process = runtime.exec(command);
@@ -3157,6 +3852,376 @@
 	   
                 	]]></Initialize>
 				</UserHandlerScript>
+        </RequestService>
+        
+        <RequestService Id="msens.xcron.hansol.stttransferfile.delete.action">
+            <Description>msens.xcron.hansol.stttransferfile.delete.action</Description>
+				<UserHandlerScript>
+                	<Initialize><![CDATA[
+                	
+						import com.inticube.xcron.logs.Logger;
+						
+						try {
+						
+							String command = "/sw/msens/MSENS_OB/XCron/temp/stt_transfer_file_delete.sh";
+							Runtime runtime = Runtime.getRuntime();
+							Process process = runtime.exec(command);
+							
+						} catch(Exception e) {
+							Logger.error(e.getMessage(), e);
+						}
+	   
+                	]]></Initialize>
+				</UserHandlerScript>
+        </RequestService>
+        
+        <RequestService Id="db.msens.ms_stt_bef_meta.selete.manual" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_bef_meta.selete.manual</Description>
+            <ResultName>MS_STT_BEF_META_DEL</ResultName>
+            <Parameter>#param</Parameter>
+				<Query><![CDATA[
+					SELECT FILEID
+					      ,UCID
+					      ,ISNULL(SP_CODE,'') SP_CODE
+					      ,ISNULL(REC_START_DT,'') REC_START_DT
+					      ,ISNULL(DURATION,'') DURATION
+					      ,ISNULL(AGENT_ID,'') AGENT_ID
+					      ,TPANO
+					      ,ISNULL(ORG_FILE_FULL_PATH,'') ORG_FILE_FULL_PATH
+					      ,ISNULL(STT_FLAG,'') STT_FLAG
+					      ,ISNULL(STT_ERR_CD,'') STT_ERR_CD
+					      ,ISNULL(STT_R_TIME,'') STT_R_TIME
+					      ,ISNULL(BATCH_YN,'') BATCH_YN
+					      ,ISNULL(VA_FLAG,'') VA_FLAG
+					      ,ISNULL(REG_ID,'') REG_ID
+					      ,ISNULL(REG_DATE,'') REG_DATE
+					      ,ISNULL(CHG_ID,'') CHG_ID
+					      ,ISNULL(CHG_DATE,'') CHG_DATE
+					  FROM ms_stt_bef_meta
+					  WHERE FILEID = ?FILEID
+					AND UCID = ?UCID
+					AND TPANO = ?TPANO
+					AND REG_DATE BETWEEN ?FROM_DATE AND ?TO_DATE
+            ]]></Query>
+        </RequestService>
+        <RequestService Id="db.msens.ms_stt_bef_meta_del.insert.manual" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_bef_meta_del.insert.manual</Description>
+            <BatchName>MS_STT_BEF_META_DEL</BatchName>
+				<Query><![CDATA[
+					MERGE ms_stt_bef_meta_del AS A
+					USING (SELECT 'X' AS DUAL) AS B
+					ON(FILEID = ?FILEID AND UCID = ?UCID AND TPANO = ?TPANO)
+					WHEN MATCHED THEN
+						UPDATE SET
+				           SP_CODE = ?SP_CODE
+				           ,REC_START_DT = ?REC_START_DT
+				           ,DURATION = ?DURATION
+				           ,AGENT_ID = ?AGENT_ID
+				           ,ORG_FILE_FULL_PATH = ?ORG_FILE_FULL_PATH
+				           ,STT_FLAG = ?STT_FLAG
+				           ,STT_ERR_CD = ?STT_ERR_CD
+				           ,STT_R_TIME = ?STT_R_TIME
+				           ,BATCH_YN = ?BATCH_YN
+				           ,VA_FLAG = ?VA_FLAG
+				           ,REG_ID = ?REG_ID
+				           ,REG_DATE = ?REG_DATE
+				           ,CHG_ID = ?CHG_ID
+				           ,CHG_DATE = ?CHG_DATE
+				           ,DEL_DATE = format(getdate(),'yyyyMMddHHmmss')
+				    WHEN NOT MATCHED THEN
+						INSERT(
+				           FILEID
+				           ,UCID
+				           ,SP_CODE
+				           ,REC_START_DT
+				           ,DURATION
+				           ,AGENT_ID
+				           ,TPANO
+				           ,ORG_FILE_FULL_PATH
+				           ,STT_FLAG
+				           ,STT_ERR_CD
+				           ,STT_R_TIME
+				           ,BATCH_YN
+				           ,VA_FLAG
+				           ,REG_ID
+				           ,REG_DATE
+				           ,CHG_ID
+				           ,CHG_DATE
+				           ,DEL_DATE
+					     )VALUES(
+				           ?FILEID
+				           ,?UCID
+				           ,?SP_CODE
+				           ,?REC_START_DT
+				           ,?DURATION
+				           ,?AGENT_ID
+				           ,?TPANO
+				           ,?ORG_FILE_FULL_PATH
+				           ,?STT_FLAG
+				           ,?STT_ERR_CD
+				           ,?STT_R_TIME
+				           ,?BATCH_YN
+				           ,?VA_FLAG
+				           ,?REG_ID
+				           ,?REG_DATE
+				           ,?CHG_ID 
+				           ,?CHG_DATE 
+				           ,format(getdate(),'yyyyMMddHHmmss'));
+			]]></Query>
+        </RequestService>
+        <RequestService Id="db.msens.ms_stt_bef_meta.delete.manual" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_bef_meta.delete.manual</Description>
+            <BatchName>MS_STT_BEF_META_DEL</BatchName>
+				<Query><![CDATA[
+					DELETE FROM ms_stt_bef_meta
+					WHERE FILEID = ?FILEID
+					AND UCID = ?UCID
+					AND TPANO = ?TPANO
+            ]]></Query>
+        </RequestService>
+        
+        <RequestService Id="db.msens.ms_stt_meta.select.manual" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_meta.select.manual</Description>
+            <ResultName>MS_STT_META_DEL</ResultName>
+            <Parameter>#param</Parameter>
+				<Query><![CDATA[
+					SELECT UCID
+				      ,CON_ENT_DGN_NO
+				      ,ISNULL(STT_FLAG,'') STT_FLAG
+				      ,ISNULL(ERR_CODE,'') ERR_CODE
+				      ,ISNULL(STT_R_TIME,'') STT_R_TIME
+				      ,ISNULL(TA_FLAG,'') TA_FLAG
+				      ,ISNULL(TA_R_TIME,'') TA_R_TIME
+				      ,ISNULL(SRC_FLAG,'') SRC_FLAG
+				      ,ISNULL(SRC_R_TIME,'') SRC_R_TIME
+				      ,ISNULL(GRD_FLAG,'') GRD_FLAG
+				      ,ISNULL(ASS_FLAG,'') ASS_FLAG
+				      ,ISNULL(ASS_R_TIME,'') ASS_R_TIME
+				      ,ISNULL(ASS_USER_ID,'') ASS_USER_ID
+				      ,ISNULL(ENC_FLAG,'') ENC_FLAG
+				      ,ISNULL(ENC_R_TIME,'') ENC_R_TIME
+				      ,ISNULL(VRS_S_FLAG,'') VRS_S_FLAG
+				      ,ISNULL(BAN_S_FLAG,'') BAN_S_FLAG
+				      ,ISNULL(DURATION,'') DURATION
+				      ,ISNULL(UCID_DATE,'') UCID_DATE
+				      ,ISNULL(USER_ID,'') USER_ID
+				      ,ISNULL(WORK_MONTH,'') WORK_MONTH
+				      ,ISNULL(CON_ENT_DGN_DATE,'') CON_ENT_DGN_DATE
+				      ,ISNULL(CON_P_CONT_NAME,'') CON_P_CONT_NAME
+				      ,ISNULL(CON_CON_MONTH_PREM,'') CON_CON_MONTH_PREM
+				      ,ISNULL(CON_CON_OLT_DEPOSIT_NM,'') CON_CON_OLT_DEPOSIT_NM
+				      ,ISNULL(CON_IP_ISD_NAME,'') CON_IP_ISD_NAME
+				      ,ISNULL(CON_CON_NA_Y_CNT,'') CON_CON_NA_Y_CNT
+				      ,ISNULL(CENTERCD,'') CENTERCD
+				      ,ISNULL(ISTP_CD,'') ISTP_CD
+				      ,ISNULL(ISTP_NM,'') ISTP_NM
+				      ,ISNULL(PROD_CD,'') PROD_CD
+				      ,ISNULL(PROD_NM,'') PROD_NM
+				      ,ISNULL(DMBO_CD,'') DMBO_CD
+				      ,ISNULL(INSUR_AMT,'') INSUR_AMT
+				      ,ISNULL(BASIC_PREM,'') BASIC_PREM
+				      ,ISNULL(CTRA_INSA_CLCD,'') CTRA_INSA_CLCD
+				      ,ISNULL(SC_LCLF_CD,'') SC_LCLF_CD
+				      ,ISNULL(G_AGE,'') G_AGE
+				      ,ISNULL(P_AGE,'') P_AGE
+				      ,ISNULL(FILE_FULL_PATH,'') FILE_FULL_PATH
+				      ,ISNULL(REG_DATE,'') REG_DATE
+				      ,ISNULL(BATCH_YN,'') BATCH_YN
+				      ,ISNULL(REG_ID,'') REG_ID
+				      ,ISNULL(CHG_ID,'') CHG_ID
+				      ,ISNULL(CHG_DATE,'') CHG_DATE
+				      ,ISNULL(G_INSUR_AGE,'') G_INSUR_AGE
+				      ,ISNULL(P_INSUR_AGE,'') P_INSUR_AGE
+				      ,ISNULL(APT_CHK_TYPE,'') APT_CHK_TYPE
+				      ,ISNULL(HOME_CHK_TYPE,'') HOME_CHK_TYPE
+				      ,ISNULL(FNNCL_SPEC_YN,'') FNNCL_SPEC_YN
+				      ,ISNULL(FNNCL_SPEC,'') FNNCL_SPEC
+				      ,ISNULL(IS_GA,'') IS_GA
+				  FROM ms_stt_meta
+				  WHERE UCID = ?UCID
+					AND CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+					AND REG_DATE BETWEEN ?FROM_DATE AND ?TO_DATE
+            ]]></Query>
+        </RequestService>
+        <RequestService Id="db.msens.ms_stt_meta_del.insert.manual" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_meta_del.insert.manual</Description>
+            <BatchName>MS_STT_META_DEL</BatchName>
+				<Query><![CDATA[
+					MERGE ms_stt_meta_del AS A
+					USING (SELECT 'X' AS DUAL) AS B
+					ON(UCID = ?UCID AND CON_ENT_DGN_NO = ?CON_ENT_DGN_NO)
+					WHEN MATCHED THEN
+						UPDATE SET
+							STT_FLAG = ?STT_FLAG
+							,ERR_CODE = ?ERR_CODE
+							,STT_R_TIME = ?STT_R_TIME
+							,TA_FLAG = ?TA_FLAG
+							,TA_R_TIME = ?TA_R_TIME
+							,SRC_FLAG = ?SRC_FLAG
+							,SRC_R_TIME = ?SRC_R_TIME
+							,GRD_FLAG = ?GRD_FLAG
+							,ASS_FLAG = ?ASS_FLAG
+							,ASS_R_TIME = ?ASS_R_TIME
+							,ASS_USER_ID = ?ASS_USER_ID
+							,ENC_FLAG = ?ENC_FLAG
+							,ENC_R_TIME = ?ENC_R_TIME
+							,VRS_S_FLAG = ?VRS_S_FLAG
+							,BAN_S_FLAG = ?BAN_S_FLAG
+							,DURATION = ?DURATION
+							,UCID_DATE = ?UCID_DATE
+							,USER_ID = ?USER_ID
+							,WORK_MONTH = ?WORK_MONTH
+							,CON_ENT_DGN_DATE = ?CON_ENT_DGN_DATE
+							,CON_P_CONT_NAME = ?CON_P_CONT_NAME
+							,CON_CON_MONTH_PREM = ?CON_CON_MONTH_PREM
+							,CON_CON_OLT_DEPOSIT_NM = ?CON_CON_OLT_DEPOSIT_NM
+							,CON_IP_ISD_NAME = ?CON_IP_ISD_NAME
+							,CON_CON_NA_Y_CNT = ?CON_CON_NA_Y_CNT
+							,CENTERCD = ?CENTERCD
+							,ISTP_CD = ?ISTP_CD
+							,ISTP_NM = ?ISTP_NM
+							,PROD_CD = ?PROD_CD
+							,PROD_NM = ?PROD_NM
+							,DMBO_CD = ?DMBO_CD
+							,INSUR_AMT = ?INSUR_AMT
+							,BASIC_PREM = ?BASIC_PREM
+							,CTRA_INSA_CLCD = ?CTRA_INSA_CLCD
+							,SC_LCLF_CD = ?SC_LCLF_CD
+							,G_AGE = ?G_AGE
+							,P_AGE = ?P_AGE
+							,FILE_FULL_PATH = ?FILE_FULL_PATH
+							,REG_DATE = ?REG_DATE
+							,BATCH_YN = ?BATCH_YN
+							,REG_ID = ?REG_ID
+							,CHG_ID = ?CHG_ID
+							,CHG_DATE = ?CHG_DATE
+							,G_INSUR_AGE = ?G_INSUR_AGE
+							,P_INSUR_AGE = ?P_INSUR_AGE
+							,APT_CHK_TYPE = ?APT_CHK_TYPE
+							,HOME_CHK_TYPE = ?HOME_CHK_TYPE
+							,FNNCL_SPEC_YN = ?FNNCL_SPEC_YN
+							,FNNCL_SPEC = ?FNNCL_SPEC
+							,IS_GA = ?IS_GA
+							,DEL_DATE = format(getdate(),'yyyyMMddHHmmss')
+					WHEN NOT MATCHED THEN
+					INSERT (
+						UCID
+						,CON_ENT_DGN_NO
+						,STT_FLAG
+						,ERR_CODE
+						,STT_R_TIME
+						,TA_FLAG
+						,TA_R_TIME
+						,SRC_FLAG
+						,SRC_R_TIME
+						,GRD_FLAG
+						,ASS_FLAG
+						,ASS_R_TIME
+						,ASS_USER_ID
+						,ENC_FLAG
+						,ENC_R_TIME
+						,VRS_S_FLAG
+						,BAN_S_FLAG
+						,DURATION
+						,UCID_DATE
+						,USER_ID
+						,WORK_MONTH
+						,CON_ENT_DGN_DATE
+						,CON_P_CONT_NAME
+						,CON_CON_MONTH_PREM
+						,CON_CON_OLT_DEPOSIT_NM
+						,CON_IP_ISD_NAME
+						,CON_CON_NA_Y_CNT
+						,CENTERCD
+						,ISTP_CD
+						,ISTP_NM
+						,PROD_CD
+						,PROD_NM
+						,DMBO_CD
+						,INSUR_AMT
+						,BASIC_PREM
+						,CTRA_INSA_CLCD
+						,SC_LCLF_CD
+						,G_AGE
+						,P_AGE
+						,FILE_FULL_PATH
+						,REG_DATE
+						,BATCH_YN
+						,REG_ID
+						,CHG_ID
+						,CHG_DATE
+						,G_INSUR_AGE
+						,P_INSUR_AGE
+						,APT_CHK_TYPE
+						,HOME_CHK_TYPE
+						,FNNCL_SPEC_YN
+						,FNNCL_SPEC
+						,IS_GA
+						,DEL_DATE
+					) VALUES (
+						?UCID
+						,?CON_ENT_DGN_NO
+						,?STT_FLAG
+						,?ERR_CODE
+						,?STT_R_TIME
+						,?TA_FLAG
+						,?TA_R_TIME
+						,?SRC_FLAG
+						,?SRC_R_TIME
+						,?GRD_FLAG
+						,?ASS_FLAG
+						,?ASS_R_TIME
+						,?ASS_USER_ID
+						,?ENC_FLAG
+						,?ENC_R_TIME
+						,?VRS_S_FLAG
+						,?BAN_S_FLAG
+						,?DURATION
+						,?UCID_DATE
+						,?USER_ID
+						,?WORK_MONTH
+						,?CON_ENT_DGN_DATE
+						,?CON_P_CONT_NAME
+						,?CON_CON_MONTH_PREM
+						,?CON_CON_OLT_DEPOSIT_NM
+						,?CON_IP_ISD_NAME
+						,?CON_CON_NA_Y_CNT
+						,?CENTERCD
+						,?ISTP_CD
+						,?ISTP_NM
+						,?PROD_CD
+						,?PROD_NM
+						,?DMBO_CD
+						,?INSUR_AMT
+						,?BASIC_PREM
+						,?CTRA_INSA_CLCD
+						,?SC_LCLF_CD
+						,?G_AGE
+						,?P_AGE
+						,?FILE_FULL_PATH
+						,?REG_DATE
+						,?BATCH_YN
+						,?REG_ID
+						,?CHG_ID
+						,?CHG_DATE
+						,?G_INSUR_AGE
+						,?P_INSUR_AGE
+						,?APT_CHK_TYPE
+						,?HOME_CHK_TYPE
+						,?FNNCL_SPEC_YN
+						,?FNNCL_SPEC
+						,?IS_GA
+						,format(getdate(),'yyyyMMddHHmmss'));
+            ]]></Query>
+        </RequestService>
+        <RequestService Id="db.msens.ms_stt_meta.delete.manual" DataSource="msensdatasource">
+            <Description>db.msens.ms_stt_meta.delete.manual</Description>
+            <BatchName>MS_STT_META_DEL</BatchName>
+			<Query><![CDATA[
+					DELETE FROM ms_stt_meta
+					WHERE UCID = ?UCID
+					AND CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+            ]]></Query>
         </RequestService>
         
          <RequestService Id="db.msens.ms_value.delete.term" DataSource="snmpdatasource">
@@ -3251,7 +4316,10 @@
 					       REGN_DT AS REGN_DT,
 					       ISNULL(DUAL_YN, ' ') AS DUAL_YN,
 					       UPDR_CRNO,
-					       ALTR_DT AS ALTR_DT
+					       ALTR_DT AS ALTR_DT,
+						   ISNULL(TTS_USE_YN,' ') TTS_USE_YN,
+						   ISNULL(VA_ESSN_YN,' ') VA_ESSN_YN,
+						   ISNULL(COMM_YN, ' ') AS COMM_YN 
 					FROM TB_SC_CODE_MNG
 					WHERE 1=1
 					AND USE_YN = 'Y'
@@ -3276,7 +4344,10 @@
 						RGTR_CRNO = ?RGTR_CRNO,
 						REGN_DT = format(CONVERT(DATE,?REGN_DT,120),'yyyyMMdd'),
 						UPDR_CRNO = ?UPDR_CRNO,
-						ALTR_DT = format(CONVERT(DATE,?ALTR_DT,120),'yyyyMMdd') 
+						ALTR_DT = format(CONVERT(DATE,?ALTR_DT,120),'yyyyMMdd'), 
+				        TTS_USE_YN = ?TTS_USE_YN,
+					    VA_ESSN_YN = ?VA_ESSN_YN,
+					    COMM_YN = ?COMM_YN									 
 					WHEN NOT MATCHED THEN
 						INSERT(
 							   SC_CD
@@ -3289,6 +4360,9 @@
 							  ,REGN_DT
 							  ,UPDR_CRNO
 							  ,ALTR_DT
+							  ,TTS_USE_YN
+						      ,VA_ESSN_YN	
+							  ,COMM_YN	
 						)
 						VALUES ( 
 							   ?SC_CD
@@ -3301,6 +4375,9 @@
 							  ,format(CONVERT(DATE,?REGN_DT,120),'yyyyMMdd') 
 							  ,?UPDR_CRNO
 							  ,format(CONVERT(DATE,?ALTR_DT,120),'yyyyMMdd') 
+							  ,?TTS_USE_YN
+						      ,?VA_ESSN_YN	
+							  ,?COMM_YN	
 						);
 			
             ]]></Query>
@@ -3322,9 +4399,11 @@
 					       M.RGTR_CRNO,
 					       M.REGN_DT AS REGN_DT,
 					       M.UPDR_CRNO,
-					       M.ALTR_DT AS ALTR_DT
+					       M.ALTR_DT AS ALTR_DT,
+					       ISNULL(M.CHNL_CLCD,'') AS CHNL_CLCD
 				FROM TB_SC_MNG M
 					WHERE M.USE_YN = 'Y' 
+					AND CHNL_CLCD IS NOT NULL					
 				--	AND (DATEDIFF(DD,CONVERT(VARCHAR,FORMAT(GETDATE()-1, 'yyyyMMdd')),REPLACE(M.ALTR_DT,'-','')) = 0 OR DATEDIFF(DD,CONVERT(VARCHAR,FORMAT(GETDATE()-1, 'yyyyMMdd')),REPLACE(M.REGN_DT,'-','')) = 0 )
             ]]></Query>
         </RequestService>
@@ -3340,6 +4419,7 @@
 						 AND CTRA_INSA_CLCD = ?CTRA_INSA_CLCD 
 						 AND SC_LCLF_CD = ?SC_LCLF_CD 
 						 AND HIST_VER = ?HIST_VER
+						 AND CHNL_CLCD = ?CHNL_CLCD
 						)
 					WHEN MATCHED THEN
 						UPDATE SET 
@@ -3364,6 +4444,7 @@
 							  ,REGN_DT
 							  ,UPDR_CRNO
 							  ,ALTR_DT
+							  ,CHNL_CLCD
 						)
 						VALUES ( 
 							   ?SC_SNO
@@ -3377,7 +4458,8 @@
 							  ,?RGTR_CRNO
 							  ,format(CONVERT(DATE,?REGN_DT,120),'yyyyMMdd') 
 							  ,?UPDR_CRNO
-							  ,format(CONVERT(DATE,?ALTR_DT,120),'yyyyMMdd') 
+							  ,format(CONVERT(DATE,?ALTR_DT,120),'yyyyMMdd')
+							  ,?CHNL_CLCD
 						);
 			
             ]]></Query>
@@ -3397,7 +4479,7 @@
 			      ISNULL(ETC4,' ') AS ETC4,
 			      ISNULL(SORT_KEY, 0) AS SORT_KEY
 			FROM MS_CODEBOOK
-			WHERE CODE_TYPE IN ('SYS105')
+			WHERE CODE_TYPE IN ('SYS105', 'SYS104')
 			AND CODE_ID <> '000000'
 		   
           ]]></Query>
@@ -3446,7 +4528,7 @@
         </RequestService>
         		
 
-        
+  <!--       
          <RequestService Id="db.msens.tb_qst_kind_mng.utp.delete" DataSource="mproddatasource">
             <Description>db.msens.tb_qst_kind_mng.utp.delete</Description>
             <Query><![CDATA[ 
@@ -3489,7 +4571,7 @@
 					 )
             ]]></Query>
         </RequestService>	
-        
+ -->        
         <RequestService Id="db.msens.ms_stt_result.delete.term" DataSource="msensdatasource">
             <Description>db.msens.ms_stt_result.delete.term</Description>
             <Parameter>#param</Parameter>
@@ -3655,17 +4737,17 @@
             <Description>db.msens.tb_sc_qst_mng.delete.term</Description>
             <Parameter>#param</Parameter>
             <Query><![CDATA[ 
-				
+
 				DELETE FROM TB_SC_QST_MNG
-				WHERE (del_date != '' AND del_date IS NOT NULL)  
+				WHERE (DEL_DATE IS NOT NULL AND LTRIM(RTRIM(DEL_DATE)) <> '')  
 				AND del_date <= ?from_date
 				
 				DELETE FROM MS_SCRIPT_MNG
-				WHERE (del_date != '' AND del_date IS NOT NULL)  
+				WHERE (DEL_DATE IS NOT NULL AND LTRIM(RTRIM(DEL_DATE)) <> '') 
 				AND del_date <= ?from_date
 				
 				DELETE FROM MS_SCRIPT_SENT
-				WHERE (del_date != '' AND del_date IS NOT NULL)  
+				WHERE (DEL_DATE IS NOT NULL AND LTRIM(RTRIM(DEL_DATE)) <> '') 
 				AND del_date <= ?from_date
 
             ]]></Query>
@@ -3995,6 +5077,168 @@
             ]]></Query>
         </RequestService>               
         
+        <!-- 추가 :: 금칙어 운영이관(210913) --> 
+        <RequestService Id="db.prod.msens.ms_codebook_VSS150_VSS151.utp.delete" DataSource="mproddatasource">
+            <Description>금칙어항목(VSS150), 금칙어그룹(VSS151) 운영꺼 삭제</Description>
+            <Query><![CDATA[ 
+				DELETE FROM MS_CODEBOOK
+				WHERE CODE_TYPE IN ('VSS150', 'VSS151')
+					AND CODE_ID <> '00'
+            ]]></Query>
+        </RequestService>
+ 
+         <RequestService Id="db.uat.msens.ms_codebook_VSS151.utp.select" DataSource="muatdatasource">
+            <Description>금칙어그룹(VSS151) UAT GET</Description>
+            <ResultName>MS_CODEBOOK_FBD_GRP</ResultName>
+				<Query><![CDATA[
+					SELECT CODE_TYPE,
+					  CODE_ID,
+					  CODE_NAME,
+					  ISNULL(PARENT_TYPE,'') AS PARENT_TYPE,
+					  ISNULL(PARENT_ID,'') AS PARENT_ID,
+					  ISNULL(ETC1,'') AS ETC1,
+					  ISNULL(ETC2,'') AS ETC2,
+					  ISNULL(ETC3,'') AS ETC3,
+					  ISNULL(ETC4,'') AS ETC4,
+					  ISNULL(ETC5,'') AS ETC5,
+					  USE_YN,
+					  ISNULL(SORT_KEY, 0) AS SORT_KEY,
+					  REG_ID,
+					  REG_TIME,
+					  CHG_ID,
+					  CHG_TIME,
+					  ISNULL(CENTER_CD,'') AS CENTER_CD,
+					  ISNULL(MODIFY_YN,'') AS MODIFY_YN
+					FROM MS_CODEBOOK
+					WHERE CODE_TYPE IN ('VSS151')
+					AND CODE_ID <> '00'
+				]]></Query>
+        </RequestService>
+		
+		<RequestService Id="db.uat.msens.ms_codebook_VSS150.utp.select" DataSource="muatdatasource">
+            <Description>금칙어항목(VSS150) UAT GET</Description>
+            <ResultName>MS_CODEBOOK_FBD_DATA</ResultName>
+				<Query><![CDATA[
+					SELECT CODE_TYPE,
+					  CODE_ID,
+					  CODE_NAME,
+					  ISNULL(PARENT_TYPE,'') AS PARENT_TYPE,
+					  ISNULL(PARENT_ID,'') AS PARENT_ID,
+					  ISNULL(ETC1,'') AS ETC1,
+					  ISNULL(ETC2,'') AS ETC2,
+					  ISNULL(ETC3,'') AS ETC3,
+					  ISNULL(ETC4,'') AS ETC4,
+					  ISNULL(ETC5,'') AS ETC5,
+					  USE_YN,
+					  ISNULL(SORT_KEY, 0) AS SORT_KEY,
+					  REG_ID,
+					  REG_TIME,
+					  CHG_ID,
+					  CHG_TIME,
+					  ISNULL(CENTER_CD,'') AS CENTER_CD,
+					  ISNULL(MODIFY_YN,'') AS MODIFY_YN
+					FROM MS_CODEBOOK
+					WHERE CODE_TYPE IN ('VSS150')
+					AND CODE_ID <> '00'
+				]]></Query>
+        </RequestService>
+         
+          
+        <RequestService Id="db.prod.msens.ms_codebook_VSS151.utp.insert" DataSource="mproddatasource">
+            <Description>금칙어그룹(VSS151) PROD INSERT</Description>
+            <BatchName>MS_CODEBOOK_FBD_GRP</BatchName>
+				<Query><![CDATA[
+					INSERT INTO MS_CODEBOOK (
+						CODE_TYPE
+						,CODE_ID
+						,CODE_NAME
+						,PARENT_TYPE
+						,PARENT_ID
+						,ETC1
+						,ETC2
+						,ETC3
+						,ETC4
+						,ETC5
+						,USE_YN
+						,SORT_KEY
+						,REG_ID
+						,REG_TIME
+						,CHG_ID
+						,CHG_TIME
+						,CENTER_CD
+						,MODIFY_YN
+						)
+					VALUES ( 
+					  ?CODE_TYPE
+					  ,?CODE_ID
+					  ,?CODE_NAME
+					  ,?PARENT_TYPE
+					  ,?PARENT_ID
+					  ,?ETC1
+					  ,?ETC2
+					  ,?ETC3
+					  ,?ETC4
+					  ,?ETC5
+					  ,?USE_YN
+					  ,?SORT_KEY
+					  ,?REG_ID
+					  ,?REG_TIME
+					  ,?CHG_ID
+					  ,FORMAT(GETDATE(), 'yyyyMMddHHmmss')
+					  ,?CENTER_CD
+					  ,?MODIFY_YN
+						);
+            ]]></Query>
+        </RequestService>
+		
+		<RequestService Id="db.prod.msens.ms_codebook_VSS150.utp.insert" DataSource="mproddatasource">
+            <Description>금칙어항목(VSS150) PROD INSERT</Description>
+            <BatchName>MS_CODEBOOK_FBD_DATA</BatchName>
+				<Query><![CDATA[
+					INSERT INTO MS_CODEBOOK (
+						CODE_TYPE
+						,CODE_ID
+						,CODE_NAME
+						,PARENT_TYPE
+						,PARENT_ID
+						,ETC1
+						,ETC2
+						,ETC3
+						,ETC4
+						,ETC5
+						,USE_YN
+						,SORT_KEY
+						,REG_ID
+						,REG_TIME
+						,CHG_ID
+						,CHG_TIME
+						,CENTER_CD
+						,MODIFY_YN
+						)
+					VALUES ( 
+					  ?CODE_TYPE
+					  ,?CODE_ID
+					  ,?CODE_NAME
+					  ,?PARENT_TYPE
+					  ,?PARENT_ID
+					  ,?ETC1
+					  ,?ETC2
+					  ,?ETC3
+					  ,?ETC4
+					  ,?ETC5
+					  ,?USE_YN
+					  ,?SORT_KEY
+					  ,?REG_ID
+					  ,?REG_TIME
+					  ,?CHG_ID
+					  ,FORMAT(GETDATE(), 'yyyyMMddHHmmss')
+					  ,?CENTER_CD
+					  ,?MODIFY_YN
+						);
+            ]]></Query>
+        </RequestService>
+        <!-- 추가 끝 :: 금칙어 운영이관(210913) -->         
+        
         <RequestService Id="msens.xcron.hansol.autoDownload.flag.update" DataSource="msensdatasource">
             <Description>msens.xcron.hansol.autoDownload.flag.update</Description>
 				<Query><![CDATA[
@@ -4159,101 +5403,125 @@
             <ResultName>TB_LIST</ResultName>
             <Parameter>#param</Parameter>
 				<Query><![CDATA[
-					SELECT
-				         CON_ENT_DGN_NO
-				        ,MIN(REG_DT) AS REG_DT
-				        ,NVL(REC_ID,' ') AS REC_ID
-				        ,NVL(CENTER_CD,' ') AS CENTER_CD
-				        ,NVL(CENTER_NM,' ') AS CENTER_NM
-				        ,NVL(AGENT_ID,' ') AS AGENT_ID
-				        ,NVL(AGENT_NM,' ') AS AGENT_NM
-				        ,NVL(CUST_ID,' ') AS CUST_ID
-				        ,NVL(CON_IP_PSN_NAME,' ') AS CON_IP_PSN_NAME
-				        ,NVL(MIN(BIRTH_DT),' ') AS BIRTH_DT 
-				        ,NVL(regexp_replace(LISTAGG(LS_CODE,',') WITHIN GROUP (ORDER BY CON_ENT_DGN_NO), '([^,]+)(,\1)*(,|$)','\1\3'),' ') AS LS_CODE --중복제거 
-				        ,NVL(regexp_replace(LISTAGG(MR_CODE,',') WITHIN GROUP (ORDER BY CON_ENT_DGN_NO), '([^,]+)(,\1)*(,|$)','\1\3'),' ') AS MR_CODE
-				 FROM (       
-						SELECT 
-						        CON_ENT_DGN_NO
-						        ,REG_DT
-						        ,REC_ID
-						        ,CENTER_CD
-						        ,CENTER_NM
-						        ,AGENT_ID
-						        ,AGENT_NM
-						        ,CUST_ID
-						        ,CON_IP_PSN_NAME
-						        ,CASE WHEN BIRTH_DT IS NOT NULL
-						                 		THEN (CASE WHEN (SUBSTR(BIRTH_DT,7,1) = 1 OR SUBSTR(BIRTH_DT,7,1) = 2 OR SUBSTR(BIRTH_DT,7,1) = 5 OR SUBSTR(BIRTH_DT,7,1) = 6) THEN  '19'||SUBSTR(BIRTH_DT,0,6) 
-						                 			 	   WHEN (SUBSTR(BIRTH_DT,7,1) = 3 OR SUBSTR(BIRTH_DT,7,1) = 4 OR SUBSTR(BIRTH_DT,7,1) = 7 OR SUBSTR(BIRTH_DT,7,1) = 8) THEN  '20'||SUBSTR(BIRTH_DT,0,6) 
-						                 			 	   ELSE '18'||SUBSTR(BIRTH_DT,0,6) END)
-						         	  ELSE '' END AS BIRTH_DT
-						        ,APP_ACT LS_CODE
-						        ,'' MR_CODE
-						FROM 
-						(
-						SELECT
-								        A.CON_ENT_DGN_NO AS CON_ENT_DGN_NO --설계번호
-								        , A.REG_DT || A.REG_TM AS REG_DT -- 협회조회일시
-								        , A.CENTER_CD AS CENTER_CD 
-								        , (SELECT GROUP_NAME FROM TSOWN.TB_GROUP_INFO WHERE GROUP_CD = A.CENTER_CD) AS CENTER_NM --센터명
-								        , A.AGENT_ID AS AGENT_ID --상담원아이디
-								        , A.AGENT_NM AS AGENT_NM --상담원명
-						                , CASE WHEN B.CON_IP_INS_CUST_NO IS NULL THEN A.CUST_NO
-								               ELSE B.CON_IP_INS_CUST_NO
-								          END AS CUST_ID --고객ID
-								       , CASE WHEN B.CON_IP_ISD_NAME IS NULL THEN A.CON_IP_PSN_NAME
-								               ELSE B.CON_IP_ISD_NAME
-								          END AS CON_IP_PSN_NAME     --피보험자고객명
-                                        , NVL(CON_IP_ISD_CD,E.IP_PSN_NO) AS BIRTH_DT
-								        , C.REC_ST AS REC_ST
-						                , A.ACT_HIST AS APP_ACT -- MR/LS 코드
-						                , A.REC_ID
-									FROM TSOWN.TB_APP_ACT_HIST A
-									   , (SELECT T1.TM_PROCESSING_GB
-                                                   ,T1.CON_ENT_DGN_NO
-                                                   ,T2.CON_IP_ISD_NAME
-                                                   ,T2.CON_IP_INS_CUST_NO
-                                                   ,T1.CON_RCPT_DTM
-                                                   ,T1.CON_APP_DATE
-                                                   ,T1.CON_APP_TIME
-                                                   ,REPLACE(PLS_DECRYPT_B64(T2.CON_IP_ISD_CD),'-','') AS CON_IP_ISD_CD 
-                                            FROM TSOWN.TB_INSU_PLAN_MAST T1, TSOWN.TB_INSU_PLAN_DETAIL T2 WHERE T1.TM_NO = T2.TM_NO) B
-                                         , (SELECT ENT_DGN_NO,REPLACE(PLS_DECRYPT_B64(IP_PSN_NO),'-','') AS IP_PSN_NO FROM TSOWN.TB_THR_EXP_REJOIN) E 
-									    , TSOWN.TB_DAPP_INQ_MNG C
-									    , (SELECT CON_ENT_DGN_NO, MIN(REG_DT) AS REG_DT FROM TSOWN.TB_APP_ACT_HIST WHERE APP_ACT = '21' GROUP BY CON_ENT_DGN_NO) D
-									WHERE A.APP_ACT IN ('50')
-									AND A.REG_DT BETWEEN  ?from_date AND ?to_date
-                                    AND A.CON_ENT_DGN_NO = E.ENT_DGN_NO(+)
-									AND A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO(+)
-								--	AND NVL(B.TM_PROCESSING_GB , '00') != '06'
-									AND A.HIST_SEQ = C.HIST_SEQ(+)
-									AND A.CON_ENT_DGN_NO = D.CON_ENT_DGN_NO(+)
-									ORDER BY A.CON_ENT_DGN_NO DESC ,A.APP_ACT ASC
-						 ) A  
-                               
-						 UNION
-						 
-						SELECT 
-						        CON_ENT_DGN_NO
-						        ,REG_DT
-						        ,REC_ID
-						        ,CENTER_CD
-						        ,CENTER_NM
-						        ,AGENT_ID
-						        ,AGENT_NM
-						        ,CUST_ID
-						        ,CON_IP_PSN_NAME
-						        ,CASE WHEN BIRTH_DT IS NOT NULL
-						                 		THEN (CASE WHEN (SUBSTR(BIRTH_DT,7,1) = 1 OR SUBSTR(BIRTH_DT,7,1) = 2 OR SUBSTR(BIRTH_DT,7,1) = 5 OR SUBSTR(BIRTH_DT,7,1) = 6) THEN  '19'||SUBSTR(BIRTH_DT,0,6) 
-						                 			 	   WHEN (SUBSTR(BIRTH_DT,7,1) = 3 OR SUBSTR(BIRTH_DT,7,1) = 4 OR SUBSTR(BIRTH_DT,7,1) = 7 OR SUBSTR(BIRTH_DT,7,1) = 8) THEN  '20'||SUBSTR(BIRTH_DT,0,6) 
-						                 			 	   ELSE '18'||SUBSTR(BIRTH_DT,0,6) END)
-						         	  ELSE '' END AS BIRTH_DT
-						        ,'' LS_CODE 
-						        ,APP_ACT MR_CODE
-						FROM 
-						(
-						SELECT
+					SELECT CON_ENT_DGN_NO
+					      ,MIN(REG_DT) AS REG_DT
+					      ,NVL(REC_ID,' ') AS REC_ID
+					      ,NVL(CENTER_CD,' ') AS CENTER_CD
+					      ,NVL(CENTER_NM,' ') AS CENTER_NM
+					      ,NVL(AGENT_ID,' ') AS AGENT_ID
+					      ,NVL(AGENT_NM,' ') AS AGENT_NM
+					      ,NVL(CUST_ID,' ') AS CUST_ID
+					      ,NVL(CON_IP_PSN_NAME,' ') AS CON_IP_PSN_NAME
+					      ,NVL(MIN(BIRTH_DT),' ') AS BIRTH_DT 
+					      ,NVL(regexp_replace(LISTAGG(LS_CODE,',') WITHIN GROUP (ORDER BY CON_ENT_DGN_NO), '([^,]+)(,\1)*(,|$)','\1\3'),' ') AS LS_CODE --중복제거 
+					      ,NVL(regexp_replace(LISTAGG(MR_CODE,',') WITHIN GROUP (ORDER BY CON_ENT_DGN_NO), '([^,]+)(,\1)*(,|$)','\1\3'),' ') AS MR_CODE
+					FROM (
+					SELECT LS.CON_ENT_DGN_NO
+					            ,LS.REG_DT
+					            ,LS.REC_ID
+					            ,LS.CENTER_CD
+					            ,LS.CENTER_NM
+					            ,LS.AGENT_ID
+					            ,LS.AGENT_NM
+					            ,LS.CUST_ID
+					            ,LS.CON_IP_PSN_NAME
+					            ,CASE WHEN LS.BIRTH_DT IS NOT NULL
+					             THEN (CASE WHEN (SUBSTR(LS.BIRTH_DT,7,1) = 1 OR SUBSTR(LS.BIRTH_DT,7,1) = 2 OR SUBSTR(LS.BIRTH_DT,7,1) = 5 OR SUBSTR(LS.BIRTH_DT,7,1) = 6) THEN  '19'||SUBSTR(LS.BIRTH_DT,0,6) 
+					                           WHEN (SUBSTR(LS.BIRTH_DT,7,1) = 3 OR SUBSTR(LS.BIRTH_DT,7,1) = 4 OR SUBSTR(LS.BIRTH_DT,7,1) = 7 OR SUBSTR(LS.BIRTH_DT,7,1) = 8) THEN  '20'||SUBSTR(LS.BIRTH_DT,0,6) 
+					                           ELSE '18'||SUBSTR(LS.BIRTH_DT,0,6) END)
+					             ELSE '' END AS BIRTH_DT
+					            ,LS.APP_ACT LS_CODE
+					            ,'' MR_CODE
+					FROM (
+					                    SELECT ROW_NUMBER() OVER(PARTITION BY A.CON_ENT_DGN_NO ORDER BY A.REG_DT DESC) AS ROW_NUM -- 설계번호 별 ROW_NUM
+					                           ,A.CON_ENT_DGN_NO
+					                          ,A.REG_DT
+					                          ,A.REC_ID
+					                          ,A.CENTER_CD
+					                          ,A.CENTER_NM
+					                          ,A.AGENT_ID
+					                          ,A.AGENT_NM
+					                          ,A.CUST_ID
+					                          ,A.CON_IP_PSN_NAME
+					                          ,A.BIRTH_DT
+					                          ,A.APP_ACT
+					                    FROM (
+												SELECT
+															ROW_NUMBER() OVER(PARTITION BY A.CON_ENT_DGN_NO, A.ACT_HIST ORDER BY A.REG_DT DESC) AS DUPL_NUM, -- 중복여부 체크
+													        A.CON_ENT_DGN_NO AS CON_ENT_DGN_NO --설계번호
+													        , A.REG_DT || A.REG_TM AS REG_DT -- 협회조회일시
+													        , A.CENTER_CD AS CENTER_CD 
+													        , (SELECT GROUP_NAME FROM TSOWN.TB_GROUP_INFO WHERE GROUP_CD = A.CENTER_CD) AS CENTER_NM --센터명
+													        , A.AGENT_ID AS AGENT_ID --상담원아이디
+													        , A.AGENT_NM AS AGENT_NM --상담원명
+											                , CASE WHEN B.CON_IP_INS_CUST_NO IS NULL THEN A.CUST_NO
+													               ELSE B.CON_IP_INS_CUST_NO
+													          END AS CUST_ID --고객ID
+													       , CASE WHEN B.CON_IP_ISD_NAME IS NULL THEN A.CON_IP_PSN_NAME
+													               ELSE B.CON_IP_ISD_NAME
+													          END AS CON_IP_PSN_NAME     --피보험자고객명
+					                                        , NVL(CON_IP_ISD_CD,E.IP_PSN_NO) AS BIRTH_DT
+													        , C.REC_ST AS REC_ST
+											                , A.ACT_HIST AS APP_ACT -- MR/LS 코드
+											                , A.REC_ID
+														FROM TSOWN.TB_APP_ACT_HIST A
+														   , (SELECT T1.TM_PROCESSING_GB
+					                                                   ,T1.CON_ENT_DGN_NO
+					                                                   ,T2.CON_IP_ISD_NAME
+					                                                   ,T2.CON_IP_INS_CUST_NO
+					                                                   ,T1.CON_RCPT_DTM
+					                                                   ,T1.CON_APP_DATE
+					                                                   ,T1.CON_APP_TIME
+					                                                   ,REPLACE(PLS_DECRYPT_B64(T2.CON_IP_ISD_CD),'-','') AS CON_IP_ISD_CD 
+					                                            FROM TSOWN.TB_INSU_PLAN_MAST T1, TSOWN.TB_INSU_PLAN_DETAIL T2 WHERE T1.TM_NO = T2.TM_NO) B
+					                                         , (SELECT ENT_DGN_NO,REPLACE(PLS_DECRYPT_B64(IP_PSN_NO),'-','') AS IP_PSN_NO FROM TSOWN.TB_THR_EXP_REJOIN) E 
+														    , TSOWN.TB_DAPP_INQ_MNG C
+														    , (SELECT CON_ENT_DGN_NO, MIN(REG_DT) AS REG_DT FROM TSOWN.TB_APP_ACT_HIST WHERE APP_ACT = '21' GROUP BY CON_ENT_DGN_NO) D
+														WHERE A.APP_ACT IN ('50')
+														AND A.REG_DT BETWEEN  ?from_date AND ?to_date
+					                                    AND A.CON_ENT_DGN_NO = E.ENT_DGN_NO(+)
+														AND A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO(+)
+													--	AND NVL(B.TM_PROCESSING_GB , '00') != '06'
+														AND A.HIST_SEQ = C.HIST_SEQ(+)
+														AND A.CON_ENT_DGN_NO = D.CON_ENT_DGN_NO(+)
+														ORDER BY A.CON_ENT_DGN_NO DESC ,A.APP_ACT ASC) A
+					                                    WHERE A.DUPL_NUM = 1 -- 중복제거
+					)LS
+					WHERE LS.ROW_NUM <= 30 --최개 30개만 추출
+					
+					UNION
+					
+					SELECT MR.CON_ENT_DGN_NO
+					      ,MR.REG_DT
+					      ,MR.REC_ID
+					      ,MR.CENTER_CD
+						  ,MR.CENTER_NM
+						  ,MR.AGENT_ID
+					      ,MR.AGENT_NM
+						  ,MR.CUST_ID
+						  ,MR.CON_IP_PSN_NAME
+						  ,CASE WHEN MR.BIRTH_DT IS NOT NULL
+					            THEN (CASE WHEN (SUBSTR(MR.BIRTH_DT,7,1) = 1 OR SUBSTR(MR.BIRTH_DT,7,1) = 2 OR SUBSTR(MR.BIRTH_DT,7,1) = 5 OR SUBSTR(MR.BIRTH_DT,7,1) = 6) THEN  '19'||SUBSTR(MR.BIRTH_DT,0,6) 
+					                       WHEN (SUBSTR(MR.BIRTH_DT,7,1) = 3 OR SUBSTR(MR.BIRTH_DT,7,1) = 4 OR SUBSTR(MR.BIRTH_DT,7,1) = 7 OR SUBSTR(MR.BIRTH_DT,7,1) = 8) THEN  '20'||SUBSTR(MR.BIRTH_DT,0,6) 
+										   ELSE '18'||SUBSTR(BIRTH_DT,0,6) END)
+					            ELSE '' END AS BIRTH_DT
+						  ,'' LS_CODE 
+						  ,MR.APP_ACT MR_CODE
+					FROM (
+						SELECT ROW_NUMBER() OVER(PARTITION BY A.CON_ENT_DGN_NO ORDER BY A.REG_DT DESC) AS ROW_NUM -- 설계번호 별 ROW_NUM
+                                ,A.CON_ENT_DGN_NO
+						        ,A.REG_DT
+						        ,A.REC_ID
+						        ,A.CENTER_CD
+						        ,A.CENTER_NM
+						        ,A.AGENT_ID
+						        ,A.AGENT_NM
+						        ,A.CUST_ID
+						        ,A.CON_IP_PSN_NAME
+                                ,A.BIRTH_DT
+                                ,A.APP_ACT
+						FROM (
+							SELECT		ROW_NUMBER() OVER(PARTITION BY A.CON_ENT_DGN_NO, A.ACT_HIST ORDER BY A.REG_DT DESC) AS DUPL_NUM,
 								        A.CON_ENT_DGN_NO AS CON_ENT_DGN_NO --설계번호
 								        , A.REG_DT || A.REG_TM AS REG_DT -- 협회조회일시
 								        , A.CENTER_CD AS CENTER_CD 
@@ -4291,9 +5559,12 @@
 									AND A.HIST_SEQ = C.HIST_SEQ(+)
 									AND A.CON_ENT_DGN_NO = D.CON_ENT_DGN_NO(+)
 									ORDER BY A.CON_ENT_DGN_NO DESC ,A.APP_ACT ASC
-						 ) A
-				 ) B
-				 GROUP BY CON_ENT_DGN_NO,CENTER_CD,CENTER_NM,AGENT_ID,AGENT_NM,CUST_ID,CON_IP_PSN_NAME,REC_ID     
+							) A 
+                            WHERE A.DUPL_NUM = 1
+						)MR
+						WHERE MR.ROW_NUM <= 30 
+					) LAST
+					GROUP BY CON_ENT_DGN_NO,CENTER_CD,CENTER_NM,AGENT_ID,AGENT_NM,CUST_ID,CON_IP_PSN_NAME,REC_ID
             ]]></Query>
             	 <CaseQuery Id="from_date">
                 <Case Expr='isEmpty("?from_date")'><![CDATA[ 
@@ -4377,6 +5648,165 @@
 							   format(GETDATE(),'yyyyMMddHHmmss')
 						);
             ]]></Query>
-        </RequestService>                    
+        </RequestService> 
+        
+        <RequestService Id="msens.xcron.hansol.gradeReanalysisWebAction">
+            <Description>msens.xcron.hansol.gradeReanalysisWebAction</Description>
+				<UserHandlerScript>
+                	<Initialize><![CDATA[
+                	
+						import java.io.BufferedReader;
+						import java.io.InputStreamReader;
+						import java.net.URL;
+						import java.net.URLConnection;
+						import com.inticube.xcron.logs.Logger;
+						import java.net.InetAddress;
+						
+						try {
+							String serverIp = InetAddress.getLocalHost().getHostAddress();
+							String sUrl = "http://"+serverIp+":8080/msens/msens.xcron.hansol.gradeReanalysisWebAction.do";
+							
+							//String sUrl = "http://10.48.241.41:8080/msens/msens.xcron.hansol.gradeReanalysisWebAction.do";
+							URL url = new URL(sUrl);
+							URLConnection urlConnection = url.openConnection();
+							            
+							BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+							
+							String inputLine = "";
+										
+							while ((inputLine = in.readLine()) != null) { 
+								System.out.println(inputLine);
+							}
+							
+							in.close();
+						} catch(Exception e) {
+							Logger.error(e.getMessage(), e);
+						}
+	   
+                	]]></Initialize>
+				</UserHandlerScript>
+        </RequestService> 
+        
+        
+        <RequestService Id="msens.xcron.hansol.SttTransferWebAction">
+            <Description>msens.xcron.hansol.SttTransferWebAction</Description>
+				<UserHandlerScript>
+                	<Initialize><![CDATA[
+                	
+						import java.io.BufferedReader;
+						import java.io.InputStreamReader;
+						import java.net.URL;
+						import java.net.URLConnection;
+						import com.inticube.xcron.logs.Logger;
+						import java.net.InetAddress;
+						
+						try {
+							String serverIp = InetAddress.getLocalHost().getHostAddress();
+							String sUrl = "http://"+serverIp+":8080/msens/msens.xcron.hansol.sttTransferWebAction.do";
+
+							//String cmd = "before";  // 2026.09.21 수정
+							String from_date = params.getValue("#PARAM").getString("from_date");
+							String to_date = params.getValue("#PARAM").getString("to_date");
+							String cmd = params.getValue("#PARAM").getString("cmd");	
+							
+							if("B".equals(cmd)) cmd = "before";
+
+							//파라미터 안보내면 어제꺼 작업함. 2026.09.14
+							sUrl += "?from_date=" + from_date + "&to_date=" + to_date +"&cmd=" + cmd;
+
+							URL url = new URL(sUrl);
+							URLConnection urlConnection = url.openConnection();
+							            
+							BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+							
+							String inputLine = "";
+										
+							while ((inputLine = in.readLine()) != null) { 
+								System.out.println(inputLine);
+							}
+							
+							in.close();
+						} catch(Exception e) {
+							Logger.error(e.getMessage(), e);
+						}
+                	]]></Initialize>
+				</UserHandlerScript>
+        </RequestService>  
+        
+        <RequestService Id="msens.xcron.hansol.SttTransferBefWebAction">
+            <Description>msens.xcron.hansol.SttTransferBefWebAction</Description>
+				<UserHandlerScript>
+                	<Initialize><![CDATA[
+                	
+						import java.io.BufferedReader;
+						import java.io.InputStreamReader;
+						import java.net.URL;
+						import java.net.URLConnection;
+						import com.inticube.xcron.logs.Logger;
+						import java.net.InetAddress;
+						
+						try {
+							String serverIp = InetAddress.getLocalHost().getHostAddress();
+							String sUrl = "http://"+serverIp+":8080/msens/msens.xcron.hansol.sttTransferBefWebAction.do";
+							
+							String cmd = "before";
+							
+							sUrl += "?cmd=" + cmd;
+							
+							URL url = new URL(sUrl);
+							URLConnection urlConnection = url.openConnection();
+							            
+							BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+							
+							String inputLine = "";
+										
+							while ((inputLine = in.readLine()) != null) { 
+								System.out.println(inputLine);
+							}
+							
+							in.close();
+						} catch(Exception e) {
+							Logger.error(e.getMessage(), e);
+						}
+	   
+                	]]></Initialize>
+				</UserHandlerScript>
+        </RequestService>    
+        
+         <RequestService Id="msens.xcron.hansol.ReInfoSttWebAction">
+            <Description>msens.xcron.hansol.ReInfoSttWebAction</Description>
+				<UserHandlerScript>
+                	<Initialize><![CDATA[
+                	
+						import java.io.BufferedReader;
+						import java.io.InputStreamReader;
+						import java.net.URL;
+						import java.net.URLConnection;
+						import com.inticube.xcron.logs.Logger;
+						import java.net.InetAddress;
+						
+						try {
+							String serverIp = InetAddress.getLocalHost().getHostAddress();
+							String sUrl = "http://"+serverIp+":8080/msens/msens.xcron.hansol.reInfoSttWebAction.do";
+							
+							URL url = new URL(sUrl);
+							URLConnection urlConnection = url.openConnection();
+							            
+							BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+							
+							String inputLine = "";
+										
+							while ((inputLine = in.readLine()) != null) { 
+								System.out.println(inputLine);
+							}
+							
+							in.close();
+						} catch(Exception e) {
+							Logger.error(e.getMessage(), e);
+						}
+	   
+                	]]></Initialize>
+				</UserHandlerScript>
+        </RequestService>                 
     </RequestServiceDefinition>
 </DomainConfig>

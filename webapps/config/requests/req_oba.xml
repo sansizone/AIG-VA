@@ -23,6 +23,18 @@
 			<page type='default'>/common/Xwing.jsp</page>
 	</request>
 	
+	<request name="oba.oba010t1t1.getInsuPlanGA.sel" login="true">
+			<description>GATM 계약상세정보 조회</description>
+			<action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010t1.getInfoGA.sel" login="true">
+			<description>GATM 청약정보 조회</description>
+			<action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
 	<request name="oba.oba010t2.getDetail.sel" login="true">
 			<description>콜청취(요약) 팝업 정보 조회</description>
 			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
@@ -83,14 +95,21 @@
 		<action-class>sens.src.search.OmitMentResWebAction</action-class>
 		<page type='default'>/common/Xwing.jsp</page>
 	</request>
+	
 	<request name="oba.oba060.sel" login="true">
 		<description>Grade분석결과 sql requset</description>
 		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
 		<page type='default'>/common/Xwing.jsp</page>
 	</request>
 
-		<request name="oba.oba010t1t1.getInsuPlan.sel" login="true">
+	<request name="oba.oba010t1t1.getInsuPlan.sel" login="true">
         <description>상세정보</description>
+        <action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="oba.oba010t1t1.getInsuPlan2.sel" login="true">
+        <description>상세정보(가정종합보험)</description>
         <action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
         <page type='default'>/common/Xwing.jsp</page>
     </request>
@@ -107,6 +126,12 @@
         <page type='default'>/common/Xwing.jsp</page>
     </request>
     
+    <request name="oba.oba010T1T4.getRMEHistoryList.sel" login="true">
+        <description>GA실손의료비이력조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
 	<request name="oba.oba080.sel" login="true">
 		<description>답보별 필수멘트 통계</description>
 		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
@@ -119,13 +144,25 @@
 		<page type='default'>/common/Xwing.jsp</page>
 	</request>
 	
+	<request name="oba.oba010T1T5.getFACHistoryList.sel" login="true">
+        <description>GA정액담보이력조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="oba.oba010T1T6.getGatmInsuPlanPaAuthList.sel" login="true">
+        <description>GA친권자정보조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+	
 	<request name="oba.oba010t1t7.getContractInfoVoList.sel" login="true">
         <description>통합 계약 이력조회</description>
         <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
         <page type='default'>/common/Xwing.jsp</page>
     </request>
     
-    <request name="oba.oba010t1t8.getRiskGradeCalChckVOList.sel" login="true">
+    <request name="oba.oba010t1p2.getRiskGradeCalChckVOList.sel" login="true">
         <description>통합 계약 이력조회</description>
         <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
         <page type='default'>/common/Xwing.jsp</page>
@@ -148,5 +185,35 @@
 			<action-class>sens.service.webaction.Timestamp</action-class>
 			<page type='default'>/common/Xwing.jsp</page>
 	</request>
+	
+	<request name="oba.oba010t1t1p1.getPrpm.sel" login="true">
+			<description>선납보험료정보 조회</description>
+			<action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010t1t1p2.getCardInfo.sel" login="true">
+			<description>카드무이자정보 조회</description>
+			<action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
     
+    <request name="oba.oba010t1p1.getProd.sel" login="true">
+			<description>상품소개정보 조회</description>
+			<action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba090.getHappyCall.sel" login="true">
+		<description>해피콜 독려 조회</description>
+		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba100.getCDD.sel" login="true">
+		<description>CDD 이행 조회</description>
+		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
 </request-config>

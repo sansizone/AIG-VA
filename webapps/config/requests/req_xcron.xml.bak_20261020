@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<request-config>
+
+	<request name="cs.xcron.control.exe" login="false">
+		<description>XCron Framework 관리 Request</description>
+		<action-class>cs.com.webaction.XCronControlWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+	</request>
+
+    <request name="cs.xcron.log.sel" login="false">
+        <description>XCron Log</description>
+        <action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+    <request name="msens.xcron.hansol.sttmetawebaction" login="false">
+        <description>STT통합정보생성 WebAction 호출</description>
+        <action-class>xcron.com.webaction.SttMetaWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+    <request name="msens.xcron.hansol.alarmmonitoringcachecall" login="false">
+        <description>알람리스트 데이터 적재 호출</description>
+        <action-class>sens.src.alarm.monitoring.AlarmMonitoringCacheCall</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+    <request name="msens.xcron.hansol.systeminfocachecall" login="false">
+        <description>시스템데이터 호출</description>
+        <action-class>sens.src.systeminfo.SystemInfoCacheCall</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+    <request name="msens.xcron.hansol.alarmsmssendwebaction" login="false">
+        <description>sms전송 호출</description>
+        <action-class>xcron.com.webaction.AlarmSMSWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+    <request name="msens.xcron.hansol.recbathtimewebaction" login="false">
+        <description>녹취배치 마지막시간 호출</description>
+        <action-class>xcron.com.webaction.RecBathTimeWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+    <request name="msens.xcron.hansol.dashboardcachecall" login="false">
+        <description>대쉬보드 - 급상승키웓,키워드감지 메모리 데이터 적재 호출</description>
+        <action-class>sens.src.dashboard.DashBoardCacheCall</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+
+	<request name="msens.xcron.hansol.scriptresultwebaction" login="false">
+			 <description>설계번호별 스크립트 결과 데이터 저장</description>
+			 <action-class>sens.src.script.ScriptResultWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	 <request name="msens.xcron.hansol.searchResultWebAction" login="false">
+			 <description>설계번호별 금칙어,필수멘트 결과 데이터 저장</description>
+			 <action-class>sens.src.search.SearchResultWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	 <request name="msens.xcron.hansol.graderesultwebaction" login="false">
+			 <description>콜별 Grade 결과 데이터 저장</description>
+			 <action-class>sens.src.grade.GradeResultWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+
+	 <request name="msens.xcron.hansol.VRSParserWebAction" login="false">
+			 <description>스크립트 문장단위로 쪼개기</description>
+			 <action-class>xcron.com.webaction.VrsParserWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	  <request name="msens.xcron.hansol.qstMngWebaction" login="false">
+			 <description>스크립트 가져오기(인터페이스용)</description>
+			 <action-class>xcron.com.webaction.QstMngWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	  <request name="msens.xcron.hansol.sttContentSplitWebaction" login="false">
+			 <description>STT 문장단위로 쪼개기</description>
+			 <action-class>xcron.com.webaction.SttContentSplitWebaction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	 <request name="msens.xcron.hansol.sttEncryptWebaction" login="false">
+			 <description>stt암호화작업 수행</description>
+			 <action-class>xcron.com.webaction.SttEncryptWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	  <request name="msens.xcron.hansol.autoAssignwebaction" login="false">
+			 <description>자동배분할당</description>
+			 <action-class>xcron.com.webaction.AutoAssignWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	 <request name="msens.xcron.hansol.getRealtimewebaction" login="false">
+			 <description>realtime DB 정보 수집</description>
+			 <action-class>xcron.com.webaction.GetRTinfoWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	 <request name="msens.xcron.hansol.sttBulkWebAction" login="false">
+			 <description>일괄암호화 수행</description>
+			 <action-class>xcron.com.webaction.SttBulkBatchWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
+	   <request name="msens.xcron.hansol.autoDownload" login="false">
+        <description>콜파일 autoDownload</description>
+        <action-class>xcron.com.webaction.AutoDownloadFile</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="msens.xcron.hansol.getBefMrLsWebAction" login="false">
+        <description>MRLS 콜 수집</description>
+        <action-class>xcron.com.webaction.GetBefMrLsWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+   <request name="msens.xcron.hansol.mrLsListWebAction" login="false">
+        <description>MRLS 콜 작업</description>
+        <action-class>xcron.com.webaction.MrLsListWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+</request-config>

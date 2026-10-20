@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<request-config>
+	<request name="oba.oba010.sel" login="true">
+		<description>상품 조회</description>
+		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba020.getBannedTerms" login="true">
+			<description>금지어 분석결과 조회</description>
+			<action-class>sens.service.webaction.GetBannedTermsWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	<request name="oba.oba020.sel" login="true">
+			<description>금지어 SQL</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010.getScriptRes.sel" login="true">
+			<description>스크립트 준수결과 조회</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010t2.getDetail.sel" login="true">
+			<description>콜청취(요약) 팝업 정보 조회</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010p1.getUcidDuration" login="true">
+			<description>콜청취(요약) 팝업 정보 조회</description>
+			<action-class>sens.service.webaction.GetUcidDuration</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010t3.getDetail.sel" login="true">
+			<description>콜청취(스크립트) 팝업 정보 조회</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba030p1.sel" login="true">
+			<description>oba030p1 sql</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	
+	<request name="oba.oba010t4.getDetail.sel" login="true">
+			<description>콜청취(금칙어) 팝업 정보 조회</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba050.sel" login="true">
+			<description>oba sql request</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+		<request name="oba.oba030.sel" login="true">
+			<description>oba sql request</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba040.getBankeywordRank.sel" login="true">
+			<description>금칙어 순위 조회</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba040p1.getBankeywordDeptRank.sel" login="true">
+			<description>금칙어 조직별 순위 조회</description>
+			<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba070.getOmitMent.sel" login="true">
+		<description>필수멘트 누락항목</description>
+		<action-class>sens.src.search.OmitMentResWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	<request name="oba.oba060.sel" login="true">
+		<description>Grade분석결과 sql requset</description>
+		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+
+		<request name="oba.oba010t1t1.getInsuPlan.sel" login="true">
+        <description>상세정보</description>
+        <action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+	
+	<request name="oba.oba010T3.getHistDtlIvstInfoList.sel" login="true">
+        <description>UW 심사이력조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="oba.oba010t1t4.getMrLsHist.sel" login="true">
+        <description>의료비조회</description>
+        <action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+	<request name="oba.oba080.sel" login="true">
+		<description>답보별 필수멘트 통계</description>
+		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba080.getMentStt" login="true">
+		<description>답보별 필수멘트 통계</description>
+		<action-class>sens.service.webaction.MentDecryptWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	<request name="oba.oba010t1t7.getContractInfoVoList.sel" login="true">
+        <description>통합 계약 이력조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="oba.oba010t1t8.getRiskGradeCalChckVOList.sel" login="true">
+        <description>통합 계약 이력조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="oba.oba010t1t9.sel" login="true">
+		<description>청약리스트 팝업 내 조회</description>
+		<action-class>jedix.xwing.action.SQLXwingWebAction</action-class>
+		<page type='default'>/common/Xwing.jsp</page>
+	</request>
+	
+	 <request name="oba.oba010t1t9.getChangeContract.sel" login="true">
+        <description>승환계약조회 내 인터페이스 정보조회</description>
+        <action-class>sens.service.webaction.ServiceCallWebAction2</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="oba.oba010p1.timestamp.upd" login="true">
+			<description>insert timestamp</description>
+			<action-class>sens.service.webaction.Timestamp</action-class>
+			<page type='default'>/common/Xwing.jsp</page>
+	</request>
+    
+</request-config>

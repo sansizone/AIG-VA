@@ -6,9 +6,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -55,101 +57,159 @@ public class SttTransferWebAction extends XwingWebAction {
 	
 	/*
 	 * STT복호화 및 SFTP 전송 
-	 * 22.05.23 추가
+	 * 26.09.10 from_to Date 입력 수정
 	 */
 	public void perform(JediRequest req, JediResponse res) throws WebActionException {
 		IVRLogger.error("#################SttTransferWebAction Start!!#################");
 		
 		try {
-			/* 0. init */
-			// Get Properties
+			/* 0. 환경설정 및 초기화 */
 			prop = new Properties(); // sftpServer.properties
 			prop = PropertyUtil.loadProperty(System.getProperty("jedi.home")+"/WEB-INF/sftpServer.properties");
 			
 			prop2 = new Properties(); // conf.properties
 			prop2 = PropertyUtil.loadProperty(System.getProperty("jedi.home")+ "/WEB-INF/conf.properties");
 			
-			/* 
-			 * 과거 콜 분석용인지 확인 
-			 * 과거 콜 분석용(cmd=='before')인 경우, 기준날짜로부터 지정된 과거날짜의 STT를 가져옴
-			 * 과거 콜 분석용이 아닌 경으, 현재 시점에서 하루 전 STT를 가져옴
-			 */
 			SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-			Calendar cal = Calendar.getInstance();
-			String dayStr = sdf.format(cal.getTime());
-			
-			String cmd = req.param.getString("cmd"); // 과거 콜 분석용인지 확인
-			if(cmd!=null&&cmd.equals("before")){
-				IVRLogger.error("#################과거 콜 추출합니다!!#################");
-				/* 시작시점에서 현시점까지의 날짜 차이 계산 */
-				Date standard = sdf.parse(standardDate);
-				Date now = sdf.parse(dayStr);
-				
-				int diffDay = (int)((now.getTime() - standard.getTime()) / (24*60*60*1000));
-				IVRLogger.error("###기준:"+sdf.format(standard)+"// 현재:"+sdf.format(now)+"// 날짜 차이:"+diffDay);
-				
-				cal.add(Calendar.DATE, -2*(diffDay+1));
-				dayStr = sdf.format(cal.getTime());
-			} else {
-				cal.add(Calendar.DATE, -1); // 하루 전 STT가 기본 설정
-				dayStr = sdf.format(cal.getTime());
-			}
-			IVRLogger.error("###dayStr(추출할 날짜)::"+ dayStr);
-			
 			Calendar minDate = Calendar.getInstance();
-			minDate.set(2022,Calendar.JANUARY,01,00,00,00);
+			minDate.set(2022, Calendar.JANUARY, 1, 0, 0, 0); // 과거 콜 하한선 제한 (2022.01.01)
 			
-			if(cal.compareTo(minDate)>-1){ // 과거 콜은 22.01.01일 데이터까지만 추출 및 전송
-				// Get filePath(임시파일저장경로)
-				String filePath = prop.getProperty("stt_sftp_temp_path");
+			/*
+			 * 26.09.10 XML 파라미터(from_date, to_date) 가져오기
+			 */
+			String cmd = req.param.getString("cmd"); // 과거 콜 분석용인지 확인 ('before')
+			String fromDateStr = req.param.getString("from_date"); // 시작일 (YYYYMMDD)
+			String toDateStr = req.param.getString("to_date");     // 종료일 (YYYYMMDD)
+			
+			List<String> targetDays = new ArrayList<>();
+			
+			if (cmd != null && "before".equals(cmd)) {
+				// 과거 콜 분석인 경우 필수 파라미터 체크
+				if (fromDateStr == null || fromDateStr.isEmpty() || toDateStr == null || toDateStr.isEmpty()) {
+					IVRLogger.error("##### [에러] 과거 콜 추출('before') 시 from_date와 to_date 파라미터는 필수입니다.");
+					IVRLogger.info("#################SttTransferWebAction END!!#################");
+					return;
+				}
 				
-				// Get fileName(임시파일명) 
-				String fileName = prop.getProperty("stt_sftp_fileName_1")+"_"+dayStr+".txt";
-				String fileName2 = prop.getProperty("stt_sftp_fileName_2")+"_"+dayStr+".txt";
+				IVRLogger.error("################# 과거 콜 추출을 시작합니다! [" + fromDateStr + " ~ " + toDateStr + "] #################");
 				
+				Calendar startCal = Calendar.getInstance();
+				startCal.setTime(sdf.parse(fromDateStr));
 				
-				IVRLogger.error("#####SttTransferWebAction filePath: "+filePath+"//fileName1: "+ fileName+"//fileName2: "+ fileName2);
+				Calendar endCal = Calendar.getInstance();
+				endCal.setTime(sdf.parse(toDateStr));
 				
+				// 시작일부터 종료일까지 하루씩 증가시키며 대상 날짜 리스트 생성
+				while (!startCal.after(endCal)) {
+					if (startCal.compareTo(minDate) >= 0) { // 2022년 1월 1일 이후 데이터만 타겟팅
+						targetDays.add(sdf.format(startCal.getTime()));
+					} else {
+						IVRLogger.info("##### [제외] 2022년 01월 01일 이전 날짜는 전송 대상에서 제외됩니다: " + sdf.format(startCal.getTime()));
+					}
+					startCal.add(Calendar.DATE, 1);
+				}
+			} else {
+				// 일반 호출인 경우 (기본값: 배치 시점 하루 전 STT 가져옴)
+				Calendar cal = Calendar.getInstance();
+				cal.add(Calendar.DATE, -1);
 				
-				/* 1-1. 데이터1 :: STT 추출 및 복호화 */
-				// ENC_FLAG가 'N'이면 Pass / 아니면 복호화
+				if (cal.compareTo(minDate) >= 0) {
+					targetDays.add(sdf.format(cal.getTime()));
+				} else {
+					IVRLogger.info("##### 과거 콜의 STT 데이터는 2022년 01월 01일 이후 데이터만 전송합니다.");
+				}
+			}
+			
+			// 추출할 일자가 없으면 즉시 종료
+			if (targetDays.isEmpty()) {
+				IVRLogger.info("##### 추출 및 전송 대상 날짜가 존재하지 않습니다.");
+				IVRLogger.info("#################SttTransferWebAction END!!#################");
+				return;
+			}
+			
+			/* 2. 대상 기간 루프 수행 (하루씩 순차 처리) */
+			String filePath = prop.getProperty("stt_sftp_temp_path");
+			
+			for (String dayStr : targetDays) {
+				IVRLogger.error("### 현재 처리 일자 (dayStr) :: " + dayStr);
+				
+				// ⚠️ [중요] 멤버 변수 오염 및 데이터 중복 축적 방지
+				// 루프가 돌 때마다 기존에 쌓인 row들을 초기화해주어야 날짜별 파일이 섞이지 않습니다.
+				// 데이터 컴포넌트 구조에 맞춰 반드시 아래처럼 초기화(clear)를 처리해주세요.
+				if (SttResultList != null) SttResultList.clear();   // (객체 제공 메서드에 따라 clearRow() 등 변형 가능)
+				if (SttResultList2 != null) SttResultList2.clear();
+				
+				// 임시파일명 구성
+				String fileName = prop.getProperty("stt_sftp_fileName_1") + "_" + dayStr + ".txt";
+				String fileName2 = prop.getProperty("stt_sftp_fileName_2") + "_" + dayStr + ".txt";
+				
+				IVRLogger.error("#####SttTransferWebAction filePath: " + filePath + " // fileName1: " + fileName + " // fileName2: " + fileName2);
+				
+				/* 2-1. 데이터1 :: STT 추출 및 복호화 */
 				SQLParam sqlParam1 = new SQLParam();
 				sqlParam1.setSqlName("msens.xcron.hansol.stttransferwebAction_1");
 				sqlParam1.addValue("dayStr", dayStr);
 				SQLParam sqlResult1 = SQLServiceManager.getInstance().execute(sqlParam1);
 				
 				int totalCnt = Integer.parseInt(sqlResult1.getListParam("msens.xcron.hansol.stttransferwebAction_1").getParam(0).getString("CNT"));
-				if(totalCnt>0){
-					int endPage = (int)Math.ceil(totalCnt*1.0/pageSize*1.0);
-					IVRLogger.error("#####SttTransferWebAction::msens.xcron.hansol.stttransferwebAction_1//totalCnt::"+totalCnt+"//endPage::"+endPage);
+				
+				if (totalCnt > 0) {
+					int endPage = (int) Math.ceil(totalCnt * 1.0 / pageSize * 1.0);
+					IVRLogger.error("#####SttTransferWebAction::totalCnt::" + totalCnt + "//endPage::" + endPage);
 					
-					for(int page=1; page<=endPage; page++){
-						start = (page-1)*pageSize;
+					for (int page = 1; page <= endPage; page++) {
+						int startRow = (page - 1) * pageSize; // ⚠️ 스레드 동시성 버그 방지를 위해 로컬 변수화
 						
-						IVRLogger.error("#####SttTransferWebAction::msens.xcron.hansol.stttransferwebAction_2::page_["+page+"/"+endPage+"]");
+						IVRLogger.error("#####SttTransferWebAction::msens.xcron.hansol.stttransferwebAction_2::page_[" + page + "/" + endPage + "]");
 						SQLParam sqlParam2 = new SQLParam();
 						sqlParam2.setSqlName("msens.xcron.hansol.stttransferwebAction_2");
-						sqlParam2.addValue("_START",  start);
-						sqlParam2.addValue("_PAGESIZE",  pageSize);
+						sqlParam2.addValue("_START", startRow);
+						sqlParam2.addValue("_PAGESIZE", pageSize);
 						sqlParam2.addValue("dayStr", dayStr);
 						SQLParam sqlResult2 = SQLServiceManager.getInstance().execute(sqlParam2);
 						
-						for(int i=0; i<sqlResult2.getCount(); i++){
+						for (int i = 0; i < sqlResult2.getCount(); i++) {
 							String encFlag = sqlResult2.getListParam("msens.xcron.hansol.stttransferwebAction_2").getParam(i).getString("ENC_FLAG"); 
 							String content = sqlResult2.getListParam("msens.xcron.hansol.stttransferwebAction_2").getParam(i).getString("CONTENT"); 
-							// 암호화되어있는 경우, 복호화
-							if(encFlag.equals("Y"))
-								content = decrypt(content);
+							
+							/*
+							 * 26.09.10 암호화된 CONTENT를 복호화
+							 */
+							if ("Y".equals(encFlag) && content != null) {
+								byte[] bytes = content.getBytes();
+								
+								
+								IVRLogger.error("#####SttTransferWebAction::bytes.length [content bytes.length: " + bytes.length + "]");
+								
+								String decryptedContent = decrypt(content);
+								
+								// 실패 시 ""가 반환되므로 null과 빈 문자열을 동시에 체크합니다.
+								if (decryptedContent == null || decryptedContent.isEmpty()) {
+									String currentUcid = String.valueOf("UCID");
+									
+									// 어떤 UCID에서 실패했는지 식별할 수 있도록 로그 기록
+									IVRLogger.error("#####SttTransferWebAction::복호화 실패로 인해 해당 자료를 건너뜁니다. [UCID: " + currentUcid + "]");
+									continue; // ★ 오류 발생 시 아래 로직을 타지 않고 다음 자료 처리로 이동
+								}
+								
+								content = decryptedContent;
+							}
+	
+							if (content == null || content.isEmpty()) continue;
 							
 							String[] lines = content.split("\n");
 							
-							// line 단위로 데이터 저장
-							for(int j=0; j<lines.length; j++){
+							// line 단위로 데이터 파싱 및 저장
+							for (int j = 0; j < lines.length; j++) {
 								String line = lines[j];
 								
+								// 방어적 코드: 구분자가 없거나 비정상 데이터 유입 시 ArrayIndexOutOfBoundsException 방지
 								String[] bars = line.split("\\|");
+								if (bars.length < 2) continue;
+								
 								String narrator = bars[0];
 								String[] tabs = bars[1].split("\t");
+								if (tabs.length < 3) continue;
 								
 								String start_time = tabs[0];
 								String end_time = tabs[1];
@@ -166,66 +226,65 @@ public class SttTransferWebAction extends XwingWebAction {
 										sqlResult2.getListParam("msens.xcron.hansol.stttransferwebAction_2").getParam(i).getString("CHG_DATE"),
 										sqlResult2.getListParam("msens.xcron.hansol.stttransferwebAction_2").getParam(i).getString("ENC_FLAG"),
 										sqlResult2.getListParam("msens.xcron.hansol.stttransferwebAction_2").getParam(i).getString("ENC_R_TIME"),
-										narrator,
-										start_time,
-										end_time, 
-										stt_content
+										narrator, start_time, end_time, stt_content
 								});
 							}
 						}
 					}
 				}
 				
-				/* 1-2. 데이터2 :: 추출한 UCID와 가입설계번호 조회 */
+				/* 2-2. 데이터2 :: 추출한 UCID와 가입설계번호 조회 */
 				SQLParam sqlParam3 = new SQLParam();
 				sqlParam3.setSqlName("msens.xcron.hansol.stttransferwebAction_3");
 				sqlParam3.addValue("dayStr", dayStr);
 				SQLParam sqlResult3 = SQLServiceManager.getInstance().execute(sqlParam3);
-				IVRLogger.error("#####SttTransferWebAction::msens.xcron.hansol.stttransferwebAction_3::getCount():"+sqlResult3.getCount());
+				IVRLogger.error("#####SttTransferWebAction::msens.xcron.hansol.stttransferwebAction_3::getCount():" + sqlResult3.getCount());
 				
-				for(int k=0; k<sqlResult3.getCount(); k++){
+				for (int k = 0; k < sqlResult3.getCount(); k++) {
 					SttResultList2.addRow(new Object[]{
 							sqlResult3.getListParam("msens.xcron.hansol.stttransferwebAction_3").getParam(k).getString("UCID"),
 							sqlResult3.getListParam("msens.xcron.hansol.stttransferwebAction_3").getParam(k).getString("CON_ENT_DGN_NO")
 					});
 				}
 				
-				
-				/* 2. 임시 파일 생성 :: 파일 생성에 성공 시 true, 실패 시 false 반환 */
-				if(!makeSttFile(filePath, fileName)) return;
-				if(!makeSttFile2(filePath, fileName2)) return;		
+				/* 2-3. 임시 파일 생성 및 SFTP 업로드 */
+				// 한 날짜가 실패하더라도 다음 날짜 전송에 영향을 주지 않도록 루프 내 제어는 continue 처리
+				if (!makeSttFile(filePath, fileName)) {
+					IVRLogger.info("#################SttTransferWebAction makeSttFile 실패로 "+ dayStr + "처리를 건너 뜁니다.");
+					continue;
+				}
+
+				if (!makeSttFile2(filePath, fileName2)) {
+					IVRLogger.info("#################SttTransferWebAction makeSttFile2 실패로 "+ dayStr + "처리를 건너 뜁니다.");
+					continue;
+				}
 				
 				/* 3. 해당 파일 SFTP 서버에 업로드 */
-				if(!transferSttFile(filePath, fileName, fileName2)) return;
-				
-				
-				IVRLogger.info("#################SttTransferWebAction END!!#################");
-			
-			} else {
-				IVRLogger.info("과거 콜의 STT 데이터는 2022년 01월 01일 이후 데이터만 전송합니다.");
-				IVRLogger.info("#################SttTransferWebAction END!!#################");
+				if(!transferSttFile(filePath, fileName, fileName2)){
+					IVRLogger.info("#################SttTransferWebAction transferSttFile 실패로 "+ dayStr + "처리를 건너 뜁니다.");
+					continue;
+				}
 			}
 		} catch (Exception e) {
 			IVRLogger.error("#####SttTransferWebAction message = "+e.getMessage());
 			IVRLogger.error(e.getStackTrace());
 		}
 	}
-		
-		
+
+	
 	/*
-	 * 암호화된 CONTENT를 복호화
+	 * 26.09.10 암호화된 CONTENT를 복호화
 	 */
 	public String decrypt(String content){
 		String decContent = "";
-		
 		String aes_key = prop2.getProperty("cipher_key");
+		
 		try {
 			AES256Cipher aes256 = AES256Cipher.getInstance(aes_key);
 			decContent = aes256.decrypt(content);
 		} catch (Exception e) {
-			e.printStackTrace();
-			IVRLogger.error("#####SttTransferWebAction message = "+e.getMessage());
-			IVRLogger.error(e.getStackTrace());
+			// e를 인자로 직접 넘겨야 StackTrace가 로그에 온전하게 찍힙니다.
+			IVRLogger.error("#####SttTransferWebAction 복호화 중 예외 발생: " + e.getMessage(), e);
 		}
 		return decContent;
 	}

@@ -71,6 +71,9 @@ function page_load(event) {
 			//$pnl_sclf_nm.setVisible(true);
 		}
 
+		//청약정보 탭에 한해 엑셀다운 권한 설정
+		parent.excelDownAuthSTT($btn_excel,false,false);
+		
 		f_codebook_sel();
 		getCtraRes();
 	}catch(e){
@@ -137,7 +140,6 @@ function getVrsDetailStt(){
 			param: {
 				_sqlName  : 'oba.oba010t3.getVrsDetailRes2.sel'
 				,TYPE : 'D'
-				//,CED_NO : "941806710728"
 				,CED_NO : parent.ced_no
 				//,SCLF_CD : parent.sclf_cd
 				//,SCLF_NM : parent.sclf_nm
@@ -207,6 +209,22 @@ function callback(reqId, res, err, xhr){
 			$DS_SCRIPT_STT.setData($DS_SCRIPT_STT_COPY.getColumnInfo(), $DS_SCRIPT_STT_COPY.getData("[CTRA_INSA_CLCD=='"+$cmb_ctra.getValue()+"'][SC_SCLF_CD=='"+lbl_sclfs.getSclfCd()+"']"));
 			highlightSelection();
 			
+		break;
+		
+		case "btnExcelClick" :
+			if(res.DS_RES==undefined){
+				xwing.Dialog.alert("출력할 데이터가 없습니다.");
+				break;
+			}
+			
+			$DS_EXCEL.clear();
+			$DS_EXCEL.setData(res.DS_RES.column, res.DS_RES.record);
+			
+			if(Xwing.getDataset('DS_EXCEL').size() > 0) {
+				Xwing.getDataGrid('grd_excel').exportData('VRS준수결과(전체)', '../jsp/export2.jsp', true); 
+			} else {
+				xwing.Dialog.alert("출력할 데이터가 없습니다.");
+			}
 		break;
 	}
 }
@@ -298,9 +316,9 @@ function cmb_ctra_change(event) {
 }
 
 function lbl_sclf_setting(){
-	var tx = "",tx_cnt="",tooltipText="";
+	var tx = "",tx_cnt="",tooltipText="", tts_use_yn="", va_essn_yn="";
 	
-	for(var i = 0; i<15; i++){
+	for(var i = 0; i<20; i++){
 		eval("$lbl_sclf_"+i+".setVisible(false)");
 	}
 	
@@ -312,6 +330,8 @@ function lbl_sclf_setting(){
 				
 				tx = $DS_SCRIPT_RES_SCLF.getValue(i,'TEXT');
 				tx_cnt = $DS_SCRIPT_RES_SCLF.getValue(i,'TEXT_CNT');
+				tts_use_yn = $DS_SCRIPT_RES_SCLF.getValue(i,'TTS_USE_YN');
+                va_essn_yn = $DS_SCRIPT_RES_SCLF.getValue(i,'VA_ESSN_YN');
 				tooltipText = tx+" (준수개수:"+tx_cnt+")";
 				txtWidth = eval("$lbl_sclf_"+i+".getWidth()");
 				fontSize = eval("$lbl_sclf_"+i+".getFontsize()");
@@ -331,6 +351,15 @@ function lbl_sclf_setting(){
 				eval("$lbl_sclf_"+i+".setValue(tx)");
 				eval("$lbl_sclf_"+i+".setTooltiptext(tooltipText)");
 				eval("$lbl_sclf_"+i+".setVisible(true)");
+				
+				if(tts_use_yn=='Y' && va_essn_yn=='Y'){
+                   	// eval("$lbl_sclf_"+i+".setBgcolor('#BA32C4')");
+					eval("$lbl_sclf_"+i+".setFontcolor('#ff9b0e')");
+                }else if(tts_use_yn=='Y'){
+                   	eval("$lbl_sclf_"+i+".setFontcolor('#001fd6')");
+                }else if(va_essn_yn=='Y'){
+					eval("$lbl_sclf_"+i+".setFontcolor('#2e7d7d')");
+                }
 			}
 			
 	/*	}else{ 요약에서 넘길때 넘기는 한개만 표시하는 경우
@@ -445,6 +474,23 @@ function highlight_multiCheck(){
 	}
 }
 
+function btn_excel_click(event){
+	var opt = {
+			reqId: "btnExcelClick",
+			url: "service::msens.xcron.hansol.sttEncryptWebaction.do",
+			param: {
+				_sqlName  : 'oba.oba010t3.getVrsDetailRes.excel'
+				,TYPE : 'D'
+				,CED_NO : parent.ced_no
+				,CTRA_INSA_CLCD : $cmb_ctra.getValue()
+			},
+			indicator: null,
+			showError: true
+	};
+	
+	Xwing.request(opt, callback);
+}
+
 //*******************************************************
 //UTIL
 //*******************************************************
@@ -492,6 +538,25 @@ function setColor2(cellObj,rowIdx) {
 	return val;
 }
 
+function expr_excel_dateTime(cellObj,rowIdx) {
+	var opt = {};
+	var dsName="DS_EXCEL";
+
+	var datetime = eval("$"+dsName+".getValue(rowIdx,'UCID_DATE')");
+	
+	if(datetime == null || datetime == '')
+		return opt;
+	
+	var yyyy = datetime.substr(0,4);
+	var MM = datetime.substr(4,2);
+	var dd = datetime.substr(6,2);
+	var hh =datetime.substr(8,2);
+	var mm =datetime.substr(10,2);
+	var ss =datetime.substr(12,2);
+
+	opt=yyyy+"-"+MM+"-"+dd+" "+hh+":"+mm+":"+ss;
+	return opt;
+}
 /*]]>*/</script>
 <xwing:data>
 	<xwing:dataset id="DS_SCRIPT_RES" description="스크립트 결과">
@@ -533,11 +598,20 @@ function setColor2(cellObj,rowIdx) {
 		<xwing:dataset-column id="TEXT"></xwing:dataset-column>
 		<xwing:dataset-column id="SCLF_CD"></xwing:dataset-column>
 	</xwing:dataset>
+	<xwing:dataset id="DS_EXCEL">
+		<xwing:dataset-column id="SCLF_NM"></xwing:dataset-column>
+		<xwing:dataset-column id="QST_NM"></xwing:dataset-column>
+		<xwing:dataset-column id="SCRIPT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="SCORE"></xwing:dataset-column>
+		<xwing:dataset-column id="UCID_DATE"></xwing:dataset-column>
+		<xwing:dataset-column id="STT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="ENC_FLAG"></xwing:dataset-column>
+	</xwing:dataset>
 </xwing:data>
 </head>
 <body>
 	<xwing:page id="page" title="콜청취" width="752" height="667" load="page_load" scroll="false" top="-5">
-		<xwing:datagrid id="grd_script_list" left="5" top="109" width="360" height="553" rownum="true" checkbox="false" binddataset="DS_SCRIPT_RES" anchor="top bottom left" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" click="grd_script_list_click">
+		<xwing:datagrid id="grd_script_list" left="5" top="127" width="360" height="536" rownum="true" checkbox="false" binddataset="DS_SCRIPT_RES" anchor="top bottom left" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" click="grd_script_list_click">
 			<xwing:datagrid-colgroup>
 				<xwing:datagrid-column></xwing:datagrid-column>
 				<xwing:datagrid-column width="250"></xwing:datagrid-column>
@@ -560,7 +634,7 @@ function setColor2(cellObj,rowIdx) {
 		</xwing:datagrid>
 		<xwing:label id="lbl_help" value="※계피구분코드" left="1" top="45" width="473" height="16" anchor="left" fontsize="9" visible="false"></xwing:label>
 		<xwing:label id="lbl_subtitle2" value="VRS준수결과" left="0" top="0" width="752" height="40" styles="label_boxtitle" halign="left" anchor="top right left" bggradientdir="horizontal" bgimagealign="left center"></xwing:label>
-		<xwing:datagrid id="grd_script_stt" left="377" top="109" width="370" height="554" rownum="true" checkbox="false" binddataset="DS_SCRIPT_STT" anchor="all" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" multiselectable="false" click="grd_script_stt_click">
+		<xwing:datagrid id="grd_script_stt" left="377" top="127" width="370" height="536" rownum="true" checkbox="false" binddataset="DS_SCRIPT_STT" anchor="all" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" multiselectable="false" click="grd_script_stt_click">
 			<xwing:datagrid-colgroup>
 				<xwing:datagrid-column width="50"></xwing:datagrid-column>
 				<xwing:datagrid-column width="290"></xwing:datagrid-column>
@@ -584,7 +658,7 @@ function setColor2(cellObj,rowIdx) {
 			<xwing:label id="lbl4_0_0" left="75" top="0" value=":" height="25" width="20" anchor="none" styles="label_subtitle"></xwing:label>
 			<xwing:label id="lbl4_0_1" left="5" top="0" value="소분류명" height="25" width="80" anchor="none" styles="label_subtitle"></xwing:label>
 		</xwing:panel>
-		<xwing:splitbar id="splitbar0" left="369" top="110" width="5" visible="true" bindwidget="r:grd_script_list,r:grd_script_stt" height="555" anchor="top bottom" cursor="w-resize" styles="split_h"></xwing:splitbar>
+		<xwing:splitbar id="splitbar0" left="369" top="127" width="5" visible="true" bindwidget="r:grd_script_list,r:grd_script_stt" height="540" anchor="top bottom" cursor="w-resize" styles="split_h"></xwing:splitbar>
 		<xwing:combo id="cmb_ctra" left="576" top="8" domaincodecolumn="CODE_ID" width="166" height="25" domaintextcolumn="CODE_NAME" domaindataset="DS_SCRIPT_RES_CTRA" change="cmb_ctra_change"></xwing:combo>
 		<xwing:label id="lbl_sclf_0" value="개개인(신용)정보인(신용)정보개인(신용)정보" left="90" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
 		<xwing:label id="lbl_sclf_1" value="청약 동의(9/9)" left="222" top="50" width="132" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
@@ -601,6 +675,42 @@ function setColor2(cellObj,rowIdx) {
 		<xwing:label id="lbl_sclf_12" value="대리인 정보 확인 (9/9)" left="306" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
 		<xwing:label id="lbl_sclf_13" value="CRS/FATCA 본인(9/9)" left="454" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
 		<xwing:label id="lbl_sclf_14" value="CRS/FATCA 본인(9/9)" left="602" top="85" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_15" value="CRS/FATCA 본인(9/9)" left="10" top="102" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_16" value="CRS/FATCA 본인(9/9)" left="158" top="102" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_17" value="CRS/FATCA 본인(9/9)" left="306" top="102" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_18" value="CRS/FATCA 본인(9/9)" left="454" top="102" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:label id="lbl_sclf_19" value="CRS/FATCA 본인(9/9)" left="602" top="102" width="148" fontsize="11" cursor="pointer" visible="false" click="lbl_sclf_change"></xwing:label>
+		<xwing:button id="btn_excel" left="715" top="9" height="25" width="25" click="btn_excel_click" styles="btn_normal" iconmargin="0 0 0 0" textpadding="0 0 0 5" borderwidth="1" anchor="top right" tabindex="10" bgimage="../images/ico_excel.png" bgimagealign="center center"></xwing:button>
+		<xwing:datagrid id="grd_excel" left="15" top="168" width="59" height="56" rownum="true" checkbox="false" anchor="top right left" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" visible="false" binddataset="DS_EXCEL">
+			<xwing:datagrid-colgroup>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+			</xwing:datagrid-colgroup>
+			<xwing:datagrid-head>
+				<xwing:datagrid-row height="30">
+					<xwing:datagrid-cell text="소분류명"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="질의유형"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="VRS"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="준수율"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="녹취일시"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="준수문장"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-head>
+			<xwing:datagrid-body>
+				<xwing:datagrid-row>
+					<xwing:datagrid-cell bindcolumn="SCLF_NM" suppress="true"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="QST_NM"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="SCRIPT_SENT"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="SCORE"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="UCID_DATE" expr="expr_excel_dateTime"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="STT_SENT"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-body>
+		</xwing:datagrid>
 	</xwing:page>
 </body>
 </html>

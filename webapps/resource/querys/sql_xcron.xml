@@ -49,7 +49,7 @@
 				   OrgFileFullPath AS ORG_FILE_FULL_PATH,
 				   BATCH_YN
 			FROM Sponsor_Callinfo WITH(NOLOCK) outer apply  dbo.fn_split_string(TPANO, ';') A, 
-				(SELECT TOP(60) A.Items
+				(SELECT TOP(30) A.Items
 				 FROM (SELECT Items,
 							   CASE WHEN SUM(CASE WHEN STT_FLAG NOT IN ('N', 'S', 'E')  THEN 1 ELSE 0 END) = COUNT(ITEMS) THEN 'Y' ELSE 'N' END AS STT_YN,
 							   MAX(InsDate) AS InsDate
@@ -64,6 +64,7 @@
 						GROUP BY Items
 					 ) A
 				WHERE A.STT_YN = 'Y' -- 설계번호의 모든 STT 분석이 다 됐거나 오류가 있는 콜만 분석한다
+				AND A.ITEMS not like 'A00000%'
 				ORDER BY InsDate DESC
 				) RE
 			WHERE A.ITEMS = RE.ITEMS
@@ -74,6 +75,7 @@
 			AND STT_FLAG NOT IN ('N', 'S', 'E')
 			AND BATCH_YN IN ('N', 'Y')
 			AND (VA_FLAG IS NULL OR VA_FLAG = 'N')
+			AND A.ITEMS not like 'A00000%'
 			ORDER BY TPANO DESC
         ]]></query>
 	 </sql-service>
@@ -185,53 +187,33 @@
         ]]></query>
 	 </sql-service>
 	
-	<sql-service name='msens.xcron.hansol.getrealtimeinfo.encrypt_1_20100410' datasource='is_stat' type='prepared'>
+	<!-- 암호화 프로세스 변화로 인한 쿼리 수정 2020-04-13 -->
+	<sql-service name='msens.xcron.hansol.getrealtimeinfo.encrypt_1' datasource='is_stat' type='prepared'>
 		<description>UCID에 해당하는 암호화 대상 대화내용 조회</description>
 		<result-name>msens.xcron.hansol.getrealtimeinfo.encrypt_1</result-name>
 		<query><![CDATA[
-			 SELECT CONTENT,
-				   ISNULL(A.ENC_FLAG,'N') AS ENC_FLAG
+			SELECT A.CONTENT,
+				   A.ENC_FLAG
+			FROM 
+			(SELECT A.UCID ,
+				   CONTENT,
+				   ISNULL(A.ENC_FLAG,'N') AS ENC_FLAG,
+				   GRD_FLAG
 			FROM MS_STT_RSLT_MERGE A WITH(NOLOCK) 
 			LEFT OUTER JOIN 
-				(SELECT A.UCID, CASE WHEN SUM(CASE WHEN A.GRD_FLAG ='Y' AND SRC_FLAG ='Y' THEN 1 ELSE 0 END) = COUNT(1) THEN 'Y' ELSE 'N' END GRD_FLAG,
-						ISNULL((SELECT FILEID FROM ms_stt_bef_meta with(nolock) WHERE FILEID = ?UCID GROUP BY FILEID),'') AS FILEID
+				(SELECT A.UCID, CASE WHEN SUM(CASE WHEN A.GRD_FLAG ='Y' AND SRC_FLAG ='Y' THEN 1 ELSE 0 END) = COUNT(1) THEN 'Y' ELSE 'N' END GRD_FLAG
 				 FROM ms_stt_meta A WITH(NOLOCK)
 				 WHERE UCID = ?UCID
 				 GROUP BY UCID)  B 
 			ON A.UCID = B.UCID
 			WHERE A.UCID = ?UCID
-			AND STT_SP_FLAG = 'Y'
-			AND ISNULL(B.GRD_FLAG, 'Y') = 'Y' AND ISNULL(B.FILEID,'') = ''
-        ]]></query>
-	 </sql-service>
-	 
-	 <sql-service name='msens.xcron.hansol.getrealtimeinfo.encrypt_1' datasource='is_stat' type='prepared'>
-		<description>UCID에 해당하는 암호화 대상 대화내용 조회</description>
-		<result-name>msens.xcron.hansol.getrealtimeinfo.encrypt_1</result-name>
-		<query><![CDATA[
-			 SELECT CONTENT,
-				   ENC_FLAG
-			FROM 
-			(SELECT UCID,
-			       CONTENT,
-				   ISNULL(A.ENC_FLAG,'N') AS ENC_FLAG,
-				   GRD_FLAG
-			FROM MS_STT_RSLT_MERGE A WITH(NOLOCK) 
-			LEFT OUTER JOIN
-			(SELECT A.UCID, CASE WHEN SUM(CASE WHEN A.GRD_FLAG ='Y' AND SRC_FLAG ='Y' THEN 1 ELSE 0 END) = COUNT(1) THEN 'Y' ELSE 'N' END GRD_FLAG
-			 FROM ms_stt_meta A WITH(NOLOCK)
-			 WHERE UCID = ?UCID
-			 GROUP BY UCID)  B 
-			ON A.UCID = B.UCID
-			WHERE A.UCID = ?UCID
-			AND STT_SP_FLAG = 'Y') A
-			LEFT OUTER JOIN
+			AND STT_SP_FLAG = 'Y') A 
+			LEFT OUTER JOIN 
 			(SELECT FILEID FROM ms_stt_bef_meta with(nolock) WHERE FILEID = ?UCID GROUP BY FILEID) B
 			ON A.UCID = B.FILEID
-			WHERE ISNULL(B.GRD_FLAG, 'Y') = 'Y' AND ISNULL(B.FILEID,'') = ''
+			WHERE ISNULL(A.GRD_FLAG, 'Y') = 'Y' AND ISNULL(B.FILEID,'') = ''
         ]]></query>
 	 </sql-service>
-	 
 	 
 	 <sql-service name='msens.xcron.hansol.getrealtimeinfo.encrypt_3' datasource='is_stat' type='prepared'>
 		<description>STT 암호화 대상건 추출</description>
@@ -311,12 +293,17 @@
 		<result-name>msens.xcron.hansol.setsttmetawebaction_1</result-name>
 		<query><![CDATA[
 
-			SELECT TOP(80) TPANO
-				   FROM ms_stt_bef_meta WITH(NOLOCK) 
-				   WHERE VA_FLAG = 'N' 
-				   AND REG_DATE BETWEEN CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'000000' AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959' 
-				   GROUP BY TPANO 
-				   ORDER BY MAX(REG_DATE) ASC
+			SELECT TOP(30) TPANO,
+						   SUBSTRING(TPANO,6,LEN(TPANO)) AS CON_ENT_DGN_NO
+			FROM ms_stt_bef_meta WITH(NOLOCK) 
+			WHERE 1=1
+			AND VA_FLAG = 'N'
+			AND SUBSTRING(TPANO ,1,1) != 'A' 
+			AND STT_FLAG <> 'R' 			
+			AND REG_DATE BETWEEN CONVERT(VARCHAR,FORMAT(GETDATE()-1, 'yyyyMMdd'))+'000000' AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959' 
+			--AND REG_DATE BETWEEN '20250919160000' AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959' 
+			GROUP BY TPANO 
+			ORDER BY MAX(REG_DATE) ASC
 				  
 
         ]]></query>
@@ -341,7 +328,7 @@
 		<query><![CDATA[
 
 			SELECT FILEID,
-                                   concat(SpCode,'_',RecStartDT,'_',AgentID) AS UCID, 
+                   concat(SpCode,'_',RecStartDT,'_',AgentID) AS UCID, 
 				   SpCode AS SP_CODE,
 				   RECSTARTDT AS UCID_DATE,
 				   TPANO AS CON_ENT_DGN_NO,
@@ -360,7 +347,7 @@
 	  </sql-service>
 
 	<sql-service name='msens.xcron.hansol.setsttmetawebaction_4' datasource='aig_tm' type='prepared'>
-		<description>설계번호로 AiGEN 정보 조회</description>
+		<description>설계번호로 AiGEN 정보 조회(변경-210913)</description>
 		<result-name>msens.xcron.hansol.setsttmetawebaction_4</result-name>
 		<query><![CDATA[
 			
@@ -388,7 +375,12 @@
 			       RE.CENTERCD,
 			       RE.TM_UPDATE_PRE_QA,
 			       RE.TM_UPDATE_PRE_JUDGE_DATE,
-			       RE.CON_APP_DATE
+			       RE.CON_APP_DATE,
+			       RE.GENR_OBJECT_TYPE_CD,
+			       RE.BLDG_STUC_SCRN_CLCD,
+			       RE.PRO_FNC_CONS_YN,
+			       RE.PRO_FNC_CONS_FC_YN,
+			       RE.ITEM_CLCD
 			FROM
 			(SELECT  m.CON_ENT_DGN_NO,
 				   				(SELECT MAX(CONCAT(REG_DT, REG_TM)) FROM TSOWN.tb_app_act_hist WHERE CON_ENT_DGN_NO = m.CON_ENT_DGN_NO AND APP_ACT = '120') AS CON_ENT_DGN_DATE,
@@ -414,10 +406,75 @@
 							   (SELECT HR_GROUP_CD FROM TSOWN.TB_GROUP_INFO WHERE GROUP_TYPE = '04' AND GROUP_CD = m.CENTERCD) AS CENTERCD,
 							   m.TM_UPDATE_PRE_QA,
 							   m.TM_UPDATE_PRE_JUDGE_DATE,
-							   m.CON_APP_DATE
-						FROM TSOWN.TB_INSU_PLAN_MAST m, TSOWN.TB_INSU_PLAN_DETAIL d
+							   m.CON_APP_DATE,
+							   g.GENR_OBJECT_TYPE_CD,
+							   g.BLDG_STUC_SCRN_CLCD,
+							   m.PRO_FNC_CONS_YN,
+							   m.PRO_FNC_CONS_FC_YN,
+							   m.ITEM_CLCD
+						FROM TSOWN.TB_INSU_PLAN_MAST m, TSOWN.TB_INSU_PLAN_DETAIL d, TSOWN.TB_INSU_PLAN_GENR g
 						WHERE m.TM_NO = d.TM_NO
+						AND m.TM_NO = g.TM_NO(+)
 			            AND m.CON_ENT_DGN_NO = ?con_ent_dgn_no
+			) RE
+
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setsttmetawebaction_ga_4' datasource='aig_tm' type='prepared'>
+		<description>설계번호로 AiGEN 정보 조회(추가-211227)</description>
+		<result-name>msens.xcron.hansol.setsttmetawebaction_4</result-name>
+		<query><![CDATA[
+			
+			SELECT RE.CON_ENT_DGN_NO,
+			       RE.CON_ENT_DGN_DATE,
+			       CASE WHEN RE.CON_ENT_DGN_DATE IS NOT NULL AND RE.OPEN_INPUT_DATE IS NOT NULL
+			            THEN MONTHS_BETWEEN(TO_DATE(SUBSTR(RE.CON_ENT_DGN_DATE,0,6)||'01','YYYYMMDD'), TO_DATE(SUBSTR(RE.OPEN_INPUT_DATE,0,6)||'01','YYYYMMDD'))+1 
+			            ELSE NULL
+			       END AS WORK_MONTH,
+			       RE.CON_P_CONT_NAME,
+			       RE.CON_CON_MONTH_PREM,
+			       RE.CON_IP_ISD_NAME,
+			       RE.CON_CON_NA_Y_CNT,
+			       RE.PROD_CD,
+			       RE.PROD_NM, 
+			       RE.DMBO_CD,
+			       RE.CTRA_INSA_CLCD,
+			       RE.G_AGE,
+			       RE.P_AGE,
+			       RE.USER_ID,
+			       RE.CENTERCD,
+			       RE.TM_UPDATE_PRE_QA,
+			       RE.TM_UPDATE_PRE_JUDGE_DATE,
+			       RE.CON_APP_DATE,
+			       RE.PRO_FNC_CONS_YN,
+			       RE.PRO_FNC_CONS_FC_YN
+			FROM
+			(SELECT  g.ENTR_DSGN_NO AS CON_ENT_DGN_NO,
+                                (SELECT MAX(CONCAT(DSGN_CMPLT_DT, DSGN_CMPLT_TM)) FROM TSOWN.TB_INSU_PLAN_GA WHERE ENTR_DSGN_NO = g.ENTR_DSGN_NO) AS CON_ENT_DGN_DATE,
+			                    (SELECT OPEN_INPUT_DATE FROM TSOWN.TB_TMR_ID_CREATE TMR WHERE TMR.USERID = g.IDUC_CRNO) AS OPEN_INPUT_DATE,
+				   				g.CTRA_NM AS CON_P_CONT_NAME,
+								g.APPY_SUM_PREM AS CON_CON_MONTH_PREM,
+								g.INSA_NM AS CON_IP_ISD_NAME,
+								g.PYMT_PRD_NM AS CON_CON_NA_Y_CNT,
+								g.PROD_CD AS PROD_CD,
+			                   (SELECT ITEM_NAME FROM TSOWN.TBIA101 WHERE ITEM_CD = g.PROD_CD) AS PROD_NM, 
+			                    g.ENTR_CVR_INFO AS DMBO_CD,
+							   (CASE WHEN CTRA_NM = INSA_NM  AND AGEN_EN = 'Y' THEN 'D,E'
+                                WHEN CTRA_NM = INSA_NM THEN 'A' 
+                                WHEN CTRA_NM != INSA_NM THEN 'B,C' 
+                                END) AS CTRA_INSA_CLCD,
+							   PLS_DECRYPT_B64(g.CTRA_SSNO) AS G_AGE,
+							   PLS_DECRYPT_B64(g.INSA_SSNO) AS P_AGE,
+							   g.IDUC_CRNO AS USER_ID,
+							   g.TREATY_BRH_CD AS CENTERCD,
+							   g.UDWR_ID AS TM_UPDATE_PRE_QA,
+							   g.IVST_DT AS TM_UPDATE_PRE_JUDGE_DATE,
+							   g.SUBS_DT AS CON_APP_DATE,
+							   g.PRO_FNC_CONS_YN,
+							   g.PRO_FNC_CONS_FC_YN
+						FROM TSOWN.TB_INSU_PLAN_GA g
+						WHERE g.ENTR_DSGN_NO = ?con_ent_dgn_no
 			) RE
 
         ]]></query>
@@ -490,7 +547,7 @@
 		<result-name>msens.xcron.hansol.setsttmetawebaction_5</result-name>
 		<query><![CDATA[
 			SELECT ETC1 AS INSUR_CD, ETC2 AS INSUR_NM 
-			FROM ms_codebook c, MS_PRODUCT m 
+			FROM ms_codebook c with(nolock), MS_PRODUCT m with(nolock)
 			WHERE c.CODE_ID = m.PROD_CD 
 			AND c.CODE_TYPE = 'COM004' AND CODE_ID != '00' 
 			AND m.PROD_CD = ?prod_cd
@@ -591,7 +648,12 @@
 				G_INSUR_AGE,
 				P_INSUR_AGE,
 				FILE_FULL_PATH,
-				BATCH_YN
+				BATCH_YN,
+				APT_CHK_TYPE, 
+				HOME_CHK_TYPE, 
+				FNNCL_SPEC, 
+				FNNCL_SPEC_YN,
+				IS_GA
 			)
 			VALUES(
 				?UCID,
@@ -632,7 +694,12 @@
 				?G_INSUR_AGE,
 				?P_INSUR_AGE,
 				?FILE_FULL_PATH,
-				?BATCH_YN
+				?BATCH_YN,
+				?APT_CHK_TYPE, 
+				?HOME_CHK_TYPE, 
+				?FNNCL_SPEC, 
+				?FNNCL_SPEC_YN,
+				?IS_GA
 			)
 
         ]]></query>
@@ -726,18 +793,43 @@
 			WHERE UCID = ?UCID
         ]]></query>
 	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setsttmetawebaction_12' datasource='is_stat' type='prepared' batch='false'>
+		<description>녹취 스폰서코드를 센터코드로 변환</description>
+		<result-name>msens.xcron.hansol.setsttmetawebaction_12</result-name>
+		<query><![CDATA[
+			SELECT ETC1 AS CENTER_CD 
+			FROM ms_codebook WITH(NOLOCK)
+			WHERE CODE_TYPE = 'SYS170'
+			AND ETC2 = ?SP_CODE
+        ]]></query>
+	</sql-service>
 
+	<sql-service name='msens.xcron.hansol.setsttmetawebaction_13' datasource='is_stat' type='prepared' batch='true'>
+		<description>콜 개수 0 건의 flag 업데이트</description>
+		<batch-name>SttIntegInfo_E</batch-name>
+		<query><![CDATA[
+			UPDATE ms_stt_bef_meta
+			SET VA_FLAG = 'E'
+			WHERE TPANO = ?TPANO
+			AND VA_FLAG <> 'Y'
+        ]]></query>
+	</sql-service>
+	
 	<sql-service name='msens.xcron.hansol.systeminfocache_1' datasource='aig_rec' type='prepared'>
 		<description>분석서버모니터링 데이터현황 조회</description>
 		<result-name>msens.xcron.hansol.systeminfocache_1</result-name>
 		<query><![CDATA[
-			  
+		
 			SELECT REC.REC_CNT,
-				     REC.REC_LAST_TIME,
-				     STT.STT_CNT,
-				     STT.STT_LAST_TIME
-			  FROM (SELECT COUNT(1) AS REC_CNT, MAX(SUBSTRING(InsDate,9,6)) AS REC_LAST_TIME FROM Sponsor_Callinfo WITH(NOLOCK) WHERE TPANO <> '' AND LEFT(InsDate,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')) REC, 
-				   (SELECT COUNT(1) AS STT_CNT, MAX(SUBSTRING(InsDate,9,6)) AS STT_LAST_TIME FROM Sponsor_Callinfo WITH(NOLOCK) WHERE TPANO <> '' AND LEFT(InsDate,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH') AND STT_FLAG = 'Y') STT 
+				   REC.REC_LAST_TIME,
+				   STT.STT_CNT,
+				   STT.STT_LAST_TIME
+			FROM (SELECT COUNT(1) AS REC_CNT, MAX(SUBSTRING(InsDate,9,6)) AS REC_LAST_TIME FROM Sponsor_Callinfo WITH(NOLOCK) WHERE TPANO <> '' 
+				  AND InsDate BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')) REC, 
+				 (SELECT COUNT(1) AS STT_CNT, MAX(SUBSTRING(InsDate,9,6)) AS STT_LAST_TIME FROM Sponsor_Callinfo WITH(NOLOCK) WHERE TPANO <> '' 
+			      AND InsDate BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss') AND STT_FLAG = 'Y') STT 
+
         ]]></query>
 	</sql-service>
 
@@ -745,20 +837,20 @@
 		<description>분석서버모니터링 데이터현황 조회</description>
 		<result-name>msens.xcron.hansol.systeminfocache_2</result-name>
 		<query><![CDATA[
-			    SELECT META.META_CNT,
-					   META.META_LAST_TIME,
-					   TA.TA_CNT,
-					   TA.TA_LAST_TIME,
-					   SRC.SRC_CNT,
-					   SRC.SRC_LAST_TIME,
-					   ANL_N.ANL_N_CNT,
-					   ANL_Y.ANL_Y_CNT,
-					   ANL_Y.ANL_LAST_TIME
-				FROM (SELECT COUNT(1) AS META_CNT, ISNULL(MAX(SUBSTRING(REG_DATE,9,6)), '000000') AS META_LAST_TIME FROM ms_stt_meta WITH(NOLOCK) WHERE LEFT(REG_DATE,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')) META,
-					 (SELECT COUNT(1) AS ANL_N_CNT FROM ms_stt_meta WITH(NOLOCK) WHERE GRD_FLAG = 'N' AND LEFT(REG_DATE,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')) ANL_N,
-					 (SELECT COUNT(1) AS ANL_Y_CNT,ISNULL(MAX(SUBSTRING(B.REG_DATE,9,6)), '000000') ANL_LAST_TIME FROM ms_grade_sum A ,ms_stt_meta B WITH(NOLOCK) WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO AND GRD_FLAG ='Y' AND LEFT(B.REG_DATE,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')) ANL_Y,
-				 	 (SELECT COUNT(1) AS TA_CNT, ISNULL(MAX(SUBSTRING(TA_R_TIME,9,6)), '000000') AS TA_LAST_TIME FROM ms_stt_meta WITH(NOLOCK) WHERE TA_FLAG = 'Y' AND LEFT(TA_R_TIME,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')) TA, 
-				     (SELECT COUNT(1) AS SRC_CNT, ISNULL(MAX(SUBSTRING(SRC_R_TIME,9,6)),'000000') AS SRC_LAST_TIME FROM ms_stt_meta WITH(NOLOCK) WHERE SRC_FLAG = 'Y' AND LEFT(SRC_R_TIME,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')) SRC 
+				SELECT META.META_CNT,
+ 				   	   META.META_LAST_TIME,
+				       TA.TA_CNT,
+				       TA.TA_LAST_TIME,
+				       SRC.SRC_CNT,
+				       SRC.SRC_LAST_TIME,
+				       ANL_N.ANL_N_CNT,
+				       ANL_Y.ANL_Y_CNT,
+				      ANL_Y.ANL_LAST_TIME
+				FROM (SELECT COUNT(1) AS META_CNT, ISNULL(MAX(SUBSTRING(REG_DATE,9,6)), '000000') AS META_LAST_TIME FROM ms_stt_meta WITH(NOLOCK) WHERE REG_DATE BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')) META,
+				 	 (SELECT COUNT(1) AS ANL_N_CNT FROM ms_stt_meta WITH(NOLOCK) WHERE GRD_FLAG = 'N' AND REG_DATE BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')) ANL_N,
+				 	 (SELECT COUNT(1) AS ANL_Y_CNT,ISNULL(MAX(SUBSTRING(B.REG_DATE,9,6)), '000000') ANL_LAST_TIME FROM ms_grade_sum A ,ms_stt_meta B WITH(NOLOCK) WHERE A.CON_ENT_DGN_NO=B.CON_ENT_DGN_NO AND GRD_FLAG ='Y' AND B.REG_DATE BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')) ANL_Y,
+			 	 	 (SELECT COUNT(1) AS TA_CNT, ISNULL(MAX(SUBSTRING(TA_R_TIME,9,6)), '000000') AS TA_LAST_TIME FROM ms_stt_meta WITH(NOLOCK) WHERE TA_FLAG = 'Y' AND TA_R_TIME BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')) TA, 
+			     	 (SELECT COUNT(1) AS SRC_CNT, ISNULL(MAX(SUBSTRING(SRC_R_TIME,9,6)),'000000') AS SRC_LAST_TIME FROM ms_stt_meta WITH(NOLOCK) WHERE SRC_FLAG = 'Y' AND SRC_R_TIME BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')) SRC 
         ]]></query>
 	</sql-service>
 
@@ -777,7 +869,7 @@
 						 , 0 AS STT_CNT
 					FROM Sponsor_Callinfo WITH(NOLOCK)
 					WHERE TPANO <> '' 
-					AND LEFT(InsDate,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')
+					AND InsDate BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')
 					GROUP BY SUBSTRING(InsDate,9,2)
 				
 					UNION ALL
@@ -787,7 +879,7 @@
 						 , COUNT(1) AS STT_CNT
 					FROM Sponsor_Callinfo WITH(NOLOCK)
 					WHERE TPANO <> '' 
-					AND LEFT(InsDate,10) BETWEEN format(GETDATE(),'yyyyMMdd')+'09' AND format(GETDATE(),'yyyyMMddHH')
+					AND InsDate BETWEEN format(GETDATE(),'yyyyMMdd')+'090000' AND format(GETDATE(),'yyyyMMddHHmmss')
 					AND STT_FLAG = 'Y'
 					GROUP BY SUBSTRING(InsDate,9,2)
 				) RE
@@ -911,14 +1003,17 @@
 						   A.REG_ID,
 						   A.REG_DATE,
 						   A.CHG_ID,
-						   A.CHG_DATE
+						   A.CHG_DATE,
+						   A.CHNL_CLCD
 			FROM  tb_sc_qst_mng A LEFT OUTER JOIN ms_script_mng B ON A.SC_SNO = B.SC_SNO AND A.SC_LCLF_CD =B.SC_LCLF_CD AND A.SC_SCLF_CD = B.SC_SCLF_CD 
-			AND A.QST_CD = B.QST_CD AND A.CNTR_CD = B.CNTR_CD
-			WHERE B.SC_SNO IS NULL AND B.SC_LCLF_CD IS NULL AND B.SC_SCLF_CD IS NULL AND B.QST_CD IS NULL AND B.CNTR_CD IS NULL
+			AND A.QST_CD = B.QST_CD AND A.CNTR_CD = B.CNTR_CD AND A.CHNL_CLCD = B.CHNL_CLCD
+			WHERE B.SC_SNO IS NULL AND B.SC_LCLF_CD IS NULL AND B.SC_SCLF_CD IS NULL AND B.QST_CD IS NULL AND B.CNTR_CD IS NULL AND B.CHNL_CLCD IS NULL
 			AND A.R_FLAG = 'N'
 			?sdate
+			?chnl_clcd
         ]]></query>
         <parameter name='sdate' value="AND A.CHG_DATE BETWEEN ?SDATE AND ?EDATE" default="" />
+        <parameter name='chnl_clcd' value="AND A.CHNL_CLCD = ?chnl_clcd" default="" />
 	</sql-service>
 
 	<sql-service name='msens.xcron.hansol.getVRSParser.upd' datasource='is_stat' type='prepared' batch='true'>
@@ -931,7 +1026,8 @@
 						 AND SC_LCLF_CD = ?SC_LCLF_CD
 						 AND SC_SCLF_CD = ?SC_SCLF_CD
 						 AND QST_CD = ?QST_CD
-						 AND CNTR_CD = ?CNTR_CD)
+						 AND CNTR_CD = ?CNTR_CD
+						 AND CHNL_CLCD = ?CHNL_CLCD)
 					WHEN MATCHED THEN
 						UPDATE SET 
 						QST_CDNM = ?QST_CDNM,
@@ -960,6 +1056,7 @@
 							   ,SORTKEY
 							   ,DEL_YN 
 							   ,DEL_DATE
+							   ,CHNL_CLCD
 						)
 						VALUES ( 
 							   ?SC_SNO
@@ -977,6 +1074,7 @@
 							   ,?SORTKEY
 							   ,?DEL_YN
 							   ,?DEL_DATE
+							   ,?CHNL_CLCD
 						);
         ]]></query>
 	</sql-service>
@@ -997,6 +1095,7 @@
 				 , SORTKEY
 				 , DEL_YN
 				 , DEL_DATE
+				 , CHNL_CLCD
 			FROM ms_script_mng			
 			WHERE 1=1
 			AND (R_FLAG = 'N' OR R_FLAG IS NULL)
@@ -1018,6 +1117,7 @@
 						 AND QST_CD = ?QST_CD
 						 AND CNTR_CD = ?CNTR_CD
 						 AND SCRIPT_SENT_ID = ?SEQ
+						 AND CHNL_CLCD = ?CHNL_CLCD
 					   )
 					WHEN MATCHED THEN
 						UPDATE SET 
@@ -1045,7 +1145,8 @@
 									EXCEPT_YN,
 									DEL_YN,
 									DEL_DATE,
-									SORTKEY
+									SORTKEY,
+									CHNL_CLCD
 								) VALUES (
 									?SC_SNO,
 									?SC_LCLF_CD,
@@ -1061,7 +1162,8 @@
 									'N',
 									?DEL_YN,
 									?DEL_DATE,
-									?SORTKEY
+									?SORTKEY,
+									?CHNL_CLCD
 						);
         ]]></query>
 	</sql-service>
@@ -1168,6 +1270,8 @@
 			WHERE S2.UCID IS NULL
 			AND STT_SP_FLAG = 'N'
 			AND ENC_FLAG = 'N'
+			AND S1.DURATION > 0 			
+			AND S1.REG_DATE BETWEEN CONVERT(VARCHAR,FORMAT(GETDATE()-1, 'yyyyMMdd'))+'000000' AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959' 			
 			order by S1.reg_date desc -- 4~6월콜 분석 위한 6~8월 콜 문장처리 위해, 현재 분석 콜 우선순위로 하고 하기!
         ]]></query>
 	</sql-service>
@@ -1283,6 +1387,42 @@
 		IN (SELECT TOP(100) sc.CON_ENT_DGN_NO FROM ms_regu_score sc LEFT OUTER JOIN 
 		ms_regu_sum su ON sc.CON_ENT_DGN_NO = su.CON_ENT_DGN_NO WHERE su.CON_ENT_DGN_NO 
 		IS NULL GROUP BY sc.CON_ENT_DGN_NO) ORDER BY r.REG_DATE ]]></query> </sql-service> -->
+<!--
+	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_1' datasource='is_stat' type='prepared'>
+		<description>스크립트 점수 배정하기</description>
+		<result-name>msens.xcron.hansol.setscriptresultwebaction_1</result-name>
+		<query><![CDATA[
+			
+			SELECT r.CON_ENT_DGN_NO,
+				   r.UCID,
+				   r.SC_SNO,
+				   r.SC_LCLF_CD,
+				   r.SC_SCLF_CD,
+				   r.QST_CD,
+				   r.CNTR_CD,
+				   r.CTRA_INSA_CLCD,
+				   r.SCRIPT_SENT_ID,
+				   r.START_TIME,
+				   ISNULL(r.TA_SCORE,'') AS TA_SCORE,
+				   ISNULL(r.SCH_SCORE,'') AS SCH_SCORE,
+				   ISNULL(s.QST_KEYWORD, '') AS QST_KEYWORD,
+				   ISNULL(r.CHG_DATE, '') AS CHG_DATE,
+				   s.QST_RATE
+			FROM ms_regu_score r WITH(NOLOCK), ms_script_sent s WITH(NOLOCK)
+			WHERE r.SC_SNO = s.SC_SNO
+			AND r.SC_LCLF_CD = s.SC_LCLF_CD
+			AND r.SC_SCLF_CD = s.SC_SCLF_CD
+			AND r.QST_CD = s.QST_CD
+			AND r.CNTR_CD =s.CNTR_CD
+			AND r.SCRIPT_SENT_ID = s.SCRIPT_SENT_ID
+			AND r.REG_DATE IS NOT NULL
+			AND CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+			ORDER BY r.REG_DATE
+
+        ]]></query>
+	</sql-service>
+-->
+
 
 	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_1' datasource='is_stat' type='prepared'>
 		<description>스크립트 점수 배정하기</description>
@@ -1310,8 +1450,17 @@
 			AND r.SC_SCLF_CD = s.SC_SCLF_CD
 			AND r.QST_CD = s.QST_CD
 			-- AND r.CNTR_CD =s.CNTR_CD
-			AND (S.CNTR_CD='00000' or (S.SNTR_CD= R.CNTR_CD and S.SC_LCLF_CD in (SELECT SC_CD from tb_sc_code_mng where type_cd = 'L' and comm_yn <> 'Y' ) )  )
-
+			-- AND (S.CNTR_CD='00000' or (S.CNTR_CD = R.CNTR_CD and S.SC_LCLF_CD in ( select SC_CD from tb_sc_code_mng where type_cd = 'L' and comm_yn <> 'Y')))
+			
+			
+                        -- 20260831 수정
+                        AND
+                        (
+                                (S.CNTR_CD='00000' and S.SC_LCLF_CD not in ( select SC_CD from tb_sc_code_mng where type_cd = 'L' and ISNULL(comm_yn,'N') <> 'Y'))
+                        or
+                                (R.CNTR_CD=S.CNTR_CD  and S.SC_LCLF_CD in ( select SC_CD from tb_sc_code_mng where type_cd = 'L' and ISNULL(comm_yn,'N') <> 'Y'))
+                        )
+			
 			AND r.SCRIPT_SENT_ID = s.SCRIPT_SENT_ID
 			AND r.REG_DATE IS NOT NULL
 			AND CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
@@ -1319,6 +1468,9 @@
 
         ]]></query>
 	</sql-service>
+
+
+
 
 	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_2' datasource='is_stat' type='prepared' batch='true'>
 		<description>VRS 문장별 점수 저장</description>
@@ -1339,6 +1491,122 @@
 			AND START_TIME = ?START_TIME
         ]]></query>
 	</sql-service>
+
+
+	<!--
+	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_3' datasource='is_stat' type='prepared'>
+		<description>스크립트 점수 배정하기</description>
+		<result-name>msens.xcron.hansol.setscriptresultwebaction_3</result-name>
+		<query><![CDATA[
+			SELECT re.CON_ENT_DGN_NO
+			       ,re.S_CTRA_INSA_CLCD
+				   ,re.CTRA_INSA_CLCD
+				   ,re.USER_ID
+				   ,re.ISTP_CD
+				   ,re.ISTP_NM
+				   ,re.PROD_CD
+				   ,re.PROD_NM
+				   ,re.TREATYHQCD
+				   ,re.TREATYHQNM
+				   ,re.TREATYBRHCD
+				   ,re.TREATYBRHNM
+				   ,re.TREATYDEPTCD
+				   ,re.TREATYDEPTNM
+				   ,ISNULL(SENT_SCORE,0) REGU_SCORE
+				   ,re.SC_LCLF_CD
+				   ,re.SC_SCLF_CD
+				   ,re.SC_SNO
+				   ,re.QST_CD
+				   ,re.CENTERCD AS CNTR_CD
+				   ,re.SCRIPT_SENT_ID
+				   ,(SELECT QST_FOCUS FROM ms_script_mng WHERE SC_SNO = re.SC_SNO AND SC_LCLF_CD = re.SC_LCLF_CD AND SC_SCLF_CD =re.SC_SCLF_CD AND QST_CD = re.QST_CD AND CNTR_CD = re.CNTR_CD) AS QST_FOCUS
+				   ,(SELECT QST_SECRET FROM ms_script_mng WHERE SC_SNO = re.SC_SNO AND SC_LCLF_CD = re.SC_LCLF_CD AND SC_SCLF_CD = re.SC_SCLF_CD AND QST_CD = re.QST_CD AND CNTR_CD = re.CNTR_CD) AS QST_SECRET
+			FROM ( SELECT DISTINCT CON_ENT_DGN_NO, SC_SNO, SC_LCLF_CD, SC_SCLF_CD, QST_CD, CNTR_CD, CTRA_INSA_CLCD, SCRIPT_SENT_ID, MAX(SENT_SCORE) AS SENT_SCORE
+					FROM ms_regu_score WITH(NOLOCK)
+					WHERE SENT_SCORE IN ( SELECT MAX(SENT_SCORE)
+										FROM ms_regu_score
+										WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+										GROUP BY CON_ENT_DGN_NO, SC_SNO, SC_LCLF_CD, SC_SCLF_CD, QST_CD, CNTR_CD, CTRA_INSA_CLCD, SCRIPT_SENT_ID) 
+					AND CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+					GROUP BY CON_ENT_DGN_NO, SC_SNO, SC_LCLF_CD, SC_SCLF_CD, QST_CD, CNTR_CD, CTRA_INSA_CLCD, SCRIPT_SENT_ID
+				  ) S RIGHT OUTER JOIN
+			(SELECT X.CON_ENT_DGN_NO
+			      ,A.SC_SNO
+				  ,A.SC_LCLF_CD
+				  ,A.SC_SCLF_CD
+				  ,A.SCRIPT_SENT_ID
+				  ,A.QST_CD
+				  ,X.CENTERCD
+				  ,A.CNTR_CD
+				  ,X.CTRA_INSA_CLCD
+				  ,X.USER_ID
+				  ,X.ISTP_CD
+				  ,X.ISTP_NM
+				  ,X.PROD_CD
+				  ,X.PROD_NM
+				  ,X.TREATYHQCD
+				  ,X.TREATYHQNM
+				  ,X.TREATYBRHCD
+				  ,X.TREATYBRHNM
+				  ,X.TREATYDEPTCD
+				  ,X.TREATYDEPTNM
+				  ,X.S_CTRA_INSA_CLCD
+			 FROM ms_script_sent A WITH(NOLOCK),
+			 (SELECT DISTINCT A.CON_ENT_DGN_NO
+			         ,A.PROD_CD
+					 ,A.DMBO_CD
+					 ,A.CTRA_INSA_CLCD
+					 ,Items AS S_CTRA_INSA_CLCD
+					 ,A.CON_CON_NA_Y_CNT
+					 ,A.SC_LCLF_CD
+					 ,A.CENTERCD
+					 ,A.G_AGE
+					 ,A.P_AGE
+					 ,A.G_INSUR_AGE
+					 ,A.P_INSUR_AGE
+					 ,A.USER_ID
+					 ,A.ISTP_CD
+					 ,A.ISTP_NM
+					 ,A.PROD_NM
+					 ,A.APT_CHK_TYPE
+					 ,A.HOME_CHK_TYPE
+					 ,A.FNNCL_SPEC
+					 ,A.FNNCL_SPEC_YN
+					 ,(SELECT TREATYHQCD FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYHQCD
+				     ,(SELECT TREATYHQNM FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYHQNM
+					 ,(SELECT TREATYBRHCD FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYBRHCD
+					 ,(SELECT TREATYBRHNM FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYBRHNM
+					 ,(SELECT TREATYDEPTCD FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYDEPTCD
+					 ,(SELECT TREATYDEPTNM FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYDEPTNM
+					FROM ms_stt_meta A WITH(NOLOCK) outer apply dbo.fn_split_string(CTRA_INSA_CLCD, ',') 
+					WHERE A.CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+			        AND STT_FLAG='Y' AND TA_FLAG='Y' AND GRD_FLAG='N'
+			)X
+			WHERE A.SC_SNO IN (SELECT SC_SNO FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = X.PROD_CD AND USE_YN='Y' AND CTRA_INSA_CLCD = X.S_CTRA_INSA_CLCD AND SC_LCLF_CD IN (SELECT Items FROM fn_split_string(X.SC_LCLF_CD,',')))
+			AND A.CNTR_CD = (CASE WHEN (SELECT COUNT(SC_SNO) FROM ms_script_mng 
+			                               WHERE SC_SNO IN (SELECT SC_SNO  FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = X.PROD_CD AND USE_YN='Y' AND CTRA_INSA_CLCD = X.S_CTRA_INSA_CLCD AND SC_LCLF_CD  IN (SELECT Items FROM fn_split_string(X.SC_LCLF_CD,','))) AND CNTR_CD = X.CENTERCD) = 0 THEN '00000' ELSE X.CENTERCD END )        
+			AND (A.QST_KIND_CD = 'A' OR A.QST_KIND_CD ='E'
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='B' AND CNTR_CD = A.CNTR_CD AND QST_COND IN (SELECT Items FROM fn_split_string(X.DMBO_CD,',')) ) ) 
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='C' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.P_INSUR_AGE) )
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='D' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.CON_CON_NA_Y_CNT) )       
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='F' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.G_AGE) )  
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='G' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.G_AGE) )  
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='H' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.APT_CHK_TYPE) )
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='I' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.HOME_CHK_TYPE) )
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD = X.FNNCL_SPEC AND CNTR_CD = A.CNTR_CD AND QST_COND = X.FNNCL_SPEC_YN) ) ) 
+			AND (A.EXCEPT_YN = 'N' OR A.EXCEPT_YN IS NULL)
+			AND A.DEL_YN='N'
+			) RE ON S.SC_SNO = RE.SC_SNO
+			AND S.CON_ENT_DGN_NO = RE.CON_ENT_DGN_NO
+			AND S.SC_LCLF_CD = RE.SC_LCLF_CD
+			AND S.SC_SCLF_CD = RE.SC_SCLF_CD
+			AND S.QST_CD = RE.QST_CD
+			AND S.CTRA_INSA_CLCD = RE.S_CTRA_INSA_CLCD
+			AND S.SCRIPT_SENT_ID = RE.SCRIPT_SENT_ID
+			ORDER BY re.S_CTRA_INSA_CLCD, re.SC_SCLF_CD, re.SCRIPT_SENT_ID
+        ]]></query>
+	</sql-service>
+	-->
 
 
 
@@ -1402,8 +1670,8 @@
 				  ,X.TREATYDEPTCD
 				  ,X.TREATYDEPTNM
 				  ,X.S_CTRA_INSA_CLCD
-			 FROM ms_script_sent A WITH(NOLOCK)
-			 LEFT JOIN tb_sc_code C WITH(NOLOCK) ON A.SC_LCLF_CD = C.SC_CD AND C.TYPE='L',
+				  FROM ms_script_sent A WITH(NOLOCK)
+				  LEFT JOIN tb_sc_code_mng C WITH(NOLOCK) ON A.SC_LCLF_CD = C.SC_CD AND C.TYPE_CD = 'L',
 			 (SELECT DISTINCT A.CON_ENT_DGN_NO
 			         ,A.PROD_CD
 					 ,A.DMBO_CD
@@ -1420,6 +1688,10 @@
 					 ,A.ISTP_CD
 					 ,A.ISTP_NM
 					 ,A.PROD_NM
+					 ,A.APT_CHK_TYPE
+					 ,A.HOME_CHK_TYPE
+					 ,A.FNNCL_SPEC
+					 ,A.FNNCL_SPEC_YN
 					 ,(SELECT TREATYHQCD FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYHQCD
 				     ,(SELECT TREATYHQNM FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYHQNM
 					 ,(SELECT TREATYBRHCD FROM ms_usermaster WHERE USER_ID = A.USER_ID) AS TREATYBRHCD
@@ -1434,16 +1706,20 @@
 			)X
 			WHERE A.SC_SNO IN (SELECT SC_SNO FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = X.PROD_CD AND USE_YN='Y' AND CTRA_INSA_CLCD = X.S_CTRA_INSA_CLCD AND SC_LCLF_CD IN (SELECT Items FROM fn_split_string(X.SC_LCLF_CD,',')))
 			/*AND A.CNTR_CD = (CASE WHEN (SELECT COUNT(SC_SNO) FROM ms_script_mng 
-			                               WHERE SC_SNO IN (SELECT SC_SNO  FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = X.PROD_CD AND USE_YN='Y' AND CTRA_INSA_CLCD = X.S_CTRA_INSA_CLCD AND SC_LCLF_CD  IN (SELECT Items FROM fn_split_string(X.SC_LCLF_CD,','))) AND CNTR_CD = X.CENTERCD) = 0 THEN '00000' ELSE X.CENTERCD END )        
-			*/
-			/* 2026.08.05, TB_SC_CODE_MNG에 COMM_YN 컬럼 추가하여 VRS 공통화 진행으로 위의 코드 대체 */
-			AND A.CNTR_CD = (CASE WHERE C.COMM_YN='Y' THEN '00000' ELSE X.CENTERCD END)
+			WHERE SC_SNO IN (SELECT SC_SNO  FROM TB_SC_MNG WHERE USE_YN<>'N' AND PROD_CD = X.PROD_CD AND USE_YN='Y' AND CTRA_INSA_CLCD = X.S_CTRA_INSA_CLCD AND SC_LCLF_CD  IN (SELECT Items FROM fn_split_string(X.SC_LCLF_CD,','))) AND CNTR_CD = X.CENTERCD) = 0 THEN '00000' ELSE X.CENTERCD END ) */        
+						       
+						       
+			AND A.CNTR_CD =	(CASE WHEN ISNULL(C.COMM_YN,'N') = 'Y' THEN '00000' ELSE X.CENTERCD END) 			       
+						    
 			AND (A.QST_KIND_CD = 'A' OR A.QST_KIND_CD ='E'
 			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='B' AND CNTR_CD = A.CNTR_CD AND QST_COND IN (SELECT Items FROM fn_split_string(X.DMBO_CD,',')) ) ) 
 			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='C' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.P_INSUR_AGE) )
 			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='D' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.CON_CON_NA_Y_CNT) )       
 			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='F' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.G_AGE) )  
-			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='G' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.G_AGE) ) )  
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='G' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.G_AGE) )  
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='H' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.APT_CHK_TYPE) )
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD ='I' AND CNTR_CD = A.CNTR_CD AND QST_COND = X.HOME_CHK_TYPE) )
+			     OR ( QST_CD IN (SELECT DISTINCT QST_CD FROM TB_QST_KIND_MNG WHERE QST_KIND_CD = X.FNNCL_SPEC AND CNTR_CD = A.CNTR_CD AND QST_COND = X.FNNCL_SPEC_YN) ) ) 
 			AND (A.EXCEPT_YN = 'N' OR A.EXCEPT_YN IS NULL)
 			AND A.DEL_YN='N'
 			) RE ON S.SC_SNO = RE.SC_SNO
@@ -1457,6 +1733,11 @@
         ]]></query>
 	</sql-service>
 
+
+
+
+
+	<!--
 	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_4' datasource='is_stat' type='prepared' batch='true'>
 		<description>설계번호별 스크립트결과 저장</description>
 		<batch-name>ScriptRsl</batch-name>
@@ -1476,7 +1757,9 @@
 				TREATYDEPTCD,
 				TREATYDEPTNM,
 				SCORE1,
-				SCORE2
+				SCORE2,
+				HCALL_YN,
+				CDD_YN
 			) VALUES (
 				?CON_ENT_DGN_NO,
 				?CTRA_INSA_CLCD,
@@ -1492,12 +1775,14 @@
 				?TREATYDEPTCD,
 				?TREATYDEPTNM,
 				?SCORE1,
-				?SCORE2
+				?SCORE2,
+				?HCALL_YN,
+				?CDD_YN
 			)
 
         ]]></query>
 	</sql-service>
-
+	
 	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_6' datasource='is_stat' type='prepared' batch='true'>
 		<description>설계번호별 스크립트결과 저장</description>
 		<batch-name>ScriptOmit</batch-name>
@@ -1594,7 +1879,217 @@
 
         ]]></query>
 	</sql-service>
+
+	-->		
 	
+	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_4' datasource='is_stat' type='prepared' batch='true'>
+		<description>설계번호별 스크립트결과 저장</description>
+		<batch-name>ScriptRsl</batch-name>
+		<query><![CDATA[
+			MERGE INTO ms_regu_sum 
+			USING (SELECT 1 AS dual) AS b
+			ON ( CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				AND CTRA_INSA_CLCD  =  ?CTRA_INSA_CLCD
+				AND USER_ID  =  ?USER_ID
+				AND ISTP_CD  =  ?ISTP_CD
+				AND PROD_CD  =  ?PROD_CD )
+			WHEN MATCHED THEN
+			    UPDATE SET 
+					ISTP_NM = ?ISTP_NM,
+					PROD_NM = ?PROD_NM,
+					TREATYHQCD = ?TREATYHQCD,
+					TREATYHQNM = ?TREATYHQNM,
+					TREATYBRHCD = ?TREATYBRHCD,
+					TREATYBRHNM = ?TREATYBRHNM,
+					TREATYDEPTCD = ?TREATYDEPTCD,
+					TREATYDEPTNM = ?TREATYDEPTNM,
+					SCORE1 = ?SCORE1,
+					SCORE2 = ?SCORE2,
+					HCALL_YN = ?HCALL_YN,
+					CDD_YN = ?CDD_YN	
+			WHEN NOT MATCHED THEN
+			    INSERT (
+					CON_ENT_DGN_NO,
+					CTRA_INSA_CLCD,
+					USER_ID,
+					ISTP_CD,
+					ISTP_NM,
+					PROD_CD,
+					PROD_NM,
+					TREATYHQCD,
+					TREATYHQNM,
+					TREATYBRHCD,
+					TREATYBRHNM,
+					TREATYDEPTCD,
+					TREATYDEPTNM,
+					SCORE1,
+					SCORE2,
+					HCALL_YN,
+					CDD_YN
+				) VALUES (
+					?CON_ENT_DGN_NO,
+					?CTRA_INSA_CLCD,
+					?USER_ID,
+					?ISTP_CD,
+					?ISTP_NM,
+					?PROD_CD,
+					?PROD_NM,
+					?TREATYHQCD,
+					?TREATYHQNM,
+					?TREATYBRHCD,
+					?TREATYBRHNM,
+					?TREATYDEPTCD,
+					?TREATYDEPTNM,
+					?SCORE1,
+					?SCORE2,
+					?HCALL_YN,
+					?CDD_YN
+				);
+        ]]></query>
+	</sql-service>
+
+
+	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_6' datasource='is_stat' type='prepared' batch='true'>
+		<description>설계번호별 스크립트결과 저장</description>
+		<batch-name>ScriptOmit</batch-name>
+		<query><![CDATA[
+			MERGE INTO ms_regu_omit  
+			USING (SELECT 1 AS dual) AS b
+			ON ( CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				AND SC_SNO  =  ?SC_SNO
+				AND SC_LCLF_CD  =  ?SC_LCLF_CD
+				AND SC_SCLF_CD  =  ?SC_SCLF_CD
+				AND QST_CD  =  ?QST_CD
+				AND CNTR_CD  =  ?CNTR_CD				
+				AND CTRA_INSA_CLCD  =  ?CTRA_INSA_CLCD				
+				AND SCRIPT_SENT_ID  =  ?SCRIPT_SENT_ID )
+			WHEN MATCHED THEN
+			    UPDATE SET 
+					SENT_SCORE = ?SENT_SCORE,
+					QST_FOCUS = ?QST_FOCUS,
+					QST_SECRET = ?QST_SECRET,
+					REG_DATE = format(GETDATE(),'yyyyMMddHHmmss')	
+			WHEN NOT MATCHED THEN
+			    INSERT (
+					CON_ENT_DGN_NO,
+					SC_SNO,
+					SC_LCLF_CD,
+					SC_SCLF_CD,
+					QST_CD,
+					CNTR_CD,
+					CTRA_INSA_CLCD,
+					SCRIPT_SENT_ID,
+					SENT_SCORE,
+					QST_FOCUS,
+					QST_SECRET,
+					REG_DATE
+				) VALUES (
+					?CON_ENT_DGN_NO,
+					?SC_SNO,
+					?SC_LCLF_CD,
+					?SC_SCLF_CD,
+					?QST_CD,
+					?CNTR_CD,
+					?CTRA_INSA_CLCD,
+					?SCRIPT_SENT_ID,
+					?SENT_SCORE,
+					?QST_FOCUS,
+					?QST_SECRET,
+					format(GETDATE(),'yyyyMMddHHmmss')
+				);
+        ]]></query>
+	</sql-service>
+
+	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_7' datasource='is_stat' type='prepared' batch='true'>
+		<description>설계번호별 개인정보처리항목 결과 전달</description>
+		<batch-name>ScriptSecret</batch-name>
+		<query><![CDATA[
+			MERGE INTO ms_regu_secret   
+			USING (SELECT 1 AS dual) AS b
+			ON ( CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				AND SC_SNO  =  ?SC_SNO
+				AND SC_LCLF_CD  =  ?SC_LCLF_CD
+				AND SC_SCLF_CD  =  ?SC_SCLF_CD
+				AND QST_CD  =  ?QST_CD
+				AND CNTR_CD  =  ?CNTR_CD				
+				AND CTRA_INSA_CLCD  =  ?CTRA_INSA_CLCD				
+				AND SCRIPT_SENT_ID  =  ?SCRIPT_SENT_ID )
+			WHEN MATCHED THEN
+			    UPDATE SET 
+					SENT_SCORE = ?SENT_SCORE,
+					SECRET_YN = ?SECRET_YN			
+			WHEN NOT MATCHED THEN
+			    INSERT (
+					CON_ENT_DGN_NO,
+					SC_SNO,
+					SC_LCLF_CD,
+					SC_SCLF_CD,
+					QST_CD,
+					CNTR_CD,
+					CTRA_INSA_CLCD,
+					SCRIPT_SENT_ID,
+					SENT_SCORE,
+					SECRET_YN
+				) VALUES (
+					?CON_ENT_DGN_NO,
+					?SC_SNO,
+					?SC_LCLF_CD,
+					?SC_SCLF_CD,
+					?QST_CD,
+					?CNTR_CD,
+					?CTRA_INSA_CLCD,
+					?SCRIPT_SENT_ID,
+					?SENT_SCORE,
+					?SECRET_YN
+				);
+        ]]></query>
+	</sql-service>
+
+	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_8' datasource='is_stat' type='prepared' batch='true'>
+		<description>설계번호별 집중관리항목 결과 전달</description>
+		<batch-name>ScriptFocus</batch-name>
+		<query><![CDATA[
+			MERGE INTO ms_regu_focus    
+			USING (SELECT 1 AS dual) AS b
+			ON ( CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				AND SC_SNO  =  ?SC_SNO
+				AND SC_LCLF_CD  =  ?SC_LCLF_CD
+				AND SC_SCLF_CD  =  ?SC_SCLF_CD
+				AND QST_CD  =  ?QST_CD
+				AND CNTR_CD  =  ?CNTR_CD				
+				AND CTRA_INSA_CLCD  =  ?CTRA_INSA_CLCD				
+				AND SCRIPT_SENT_ID  =  ?SCRIPT_SENT_ID )
+			WHEN MATCHED THEN
+			    UPDATE SET 
+					SENT_SCORE = ?SENT_SCORE,
+					SECRET_YN = ?SECRET_YN
+			WHEN NOT MATCHED THEN
+			    INSERT (
+					CON_ENT_DGN_NO,
+					SC_SNO,
+					SC_LCLF_CD,
+					SC_SCLF_CD,
+					QST_CD,
+					CNTR_CD,
+					CTRA_INSA_CLCD,
+					SCRIPT_SENT_ID,
+					SENT_SCORE,
+					FOCUS_YN
+				) VALUES (
+					?CON_ENT_DGN_NO,
+					?SC_SNO,
+					?SC_LCLF_CD,
+					?SC_SCLF_CD,
+					?QST_CD,
+					?CNTR_CD,
+					?CTRA_INSA_CLCD,
+					?SCRIPT_SENT_ID,
+					?SENT_SCORE,
+					?SECRET_YN
+				);
+        ]]></query>
+	</sql-service>	
+
 	<sql-service name='msens.xcron.hansol.setscriptresultwebaction_9' datasource='is_stat' type='prepared' batch='true'>
 		<description>스크립트 준수율 계산 FLAG update</description>
 		<batch-name>ScriptRsl</batch-name>
@@ -1624,11 +2119,12 @@
 		<result-name>msens.xcron.hansol.setscriptresultwebaction_11</result-name>
 		<query><![CDATA[
 			
-			SELECT TOP(100) A.CON_ENT_DGN_NO
+			SELECT TOP(30) A.CON_ENT_DGN_NO
 			FROM ms_stt_meta A WITH(NOLOCK),
-			(SELECT CON_ENT_DGN_NO, CASE WHEN COUNT(1) = SUM(CASE WHEN STT_FLAG = 'Y' AND TA_FLAG = 'Y' AND GRD_FLAG = 'N' AND VRS_S_FLAG = 'N' THEN 1 ELSE 0 END) THEN 'Y' ELSE 'N' END AS TA_FLAG
-			FROM ms_stt_meta WITH(NOLOCK)
-			GROUP BY CON_ENT_DGN_NO ) B 
+				(SELECT CON_ENT_DGN_NO, CASE WHEN COUNT(1) = SUM(CASE WHEN STT_FLAG = 'Y' AND TA_FLAG = 'Y' AND GRD_FLAG = 'N' AND VRS_S_FLAG = 'N' THEN 1 ELSE 0 END) THEN 'Y' ELSE 'N' END AS TA_FLAG
+				FROM ms_stt_meta WITH(NOLOCK)
+				WHERE REG_DATE BETWEEN CONVERT(VARCHAR,FORMAT(GETDATE()-7, 'yyyyMMdd'))+'000000'  AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959' -- 7일전 데이터까지만 찾기(쿼리 속도 개선을 위해)
+				GROUP BY CON_ENT_DGN_NO ) B 
 			WHERE A.CON_ENT_DGN_NO = B.CON_ENT_DGN_NO
 			AND B.TA_FLAG = 'Y'
 			GROUP BY A.CON_ENT_DGN_NO
@@ -1653,7 +2149,7 @@
 		<result-name>msens.xcron.hansol.setsearchresultwebaction_5</result-name>
 		<query><![CDATA[
 			
-			SELECT TOP(100) CON_ENT_DGN_NO
+			SELECT TOP(30) CON_ENT_DGN_NO
 			FROM (
 					SELECT M.CON_ENT_DGN_NO, CASE WHEN COUNT(1) = SUM(CASE WHEN STT_FLAG = 'Y' AND SRC_FLAG = 'Y' AND BAN_S_FLAG = 'N' THEN 1 ELSE 0 END) THEN 'Y' ELSE 'N' END AS SRC_FLAG
 					FROM ms_search_sum S WITH(NOLOCK) RIGHT OUTER JOIN ms_stt_meta  M WITH(NOLOCK) ON S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
@@ -1780,7 +2276,7 @@
 		<result-name>msens.xcron.hansol.setgraderesultwebaction_1</result-name>
 		<query><![CDATA[
 			
-			SELECT TOP(50) CON_ENT_DGN_NO,USER_ID, WORK_MONTH
+			SELECT TOP(30) CON_ENT_DGN_NO,USER_ID, WORK_MONTH
 			FROM (
 					SELECT M.CON_ENT_DGN_NO, M.USER_ID, M.WORK_MONTH, 
 						  CASE WHEN COUNT(1) = SUM(CASE WHEN M.STT_FLAG = 'Y' AND M.TA_FLAG = 'Y' AND M.SRC_FLAG = 'Y' AND M.GRD_FLAG = 'N'
@@ -1799,7 +2295,7 @@
 		<result-name>msens.xcron.hansol.setgraderesultwebaction_1</result-name>
 		<query><![CDATA[
 			
-			SELECT TOP(50) CON_ENT_DGN_NO,USER_ID, WORK_MONTH
+			SELECT TOP(30) CON_ENT_DGN_NO,USER_ID, WORK_MONTH
 			FROM (
 					SELECT M.CON_ENT_DGN_NO, M.USER_ID, M.WORK_MONTH, 
 						  CASE WHEN COUNT(1) = SUM(CASE WHEN M.STT_FLAG = 'Y' AND M.TA_FLAG = 'Y' AND M.GRD_FLAG = 'N'
@@ -1818,7 +2314,7 @@
 		<result-name>msens.xcron.hansol.setgraderesultwebaction_1</result-name>
 		<query><![CDATA[
 			
-			SELECT TOP(50) CON_ENT_DGN_NO,USER_ID, WORK_MONTH
+			SELECT TOP(30) CON_ENT_DGN_NO,USER_ID, WORK_MONTH
 			FROM (
 					SELECT M.CON_ENT_DGN_NO, M.USER_ID, M.WORK_MONTH, 
 						  CASE WHEN COUNT(1) = SUM(CASE WHEN M.STT_FLAG = 'Y' AND M.SRC_FLAG = 'Y' AND M.GRD_FLAG = 'N'
@@ -1839,8 +2335,9 @@
 			
 			SELECT VERSION,
 				   GRADE,
-				   CASE WHEN GRADE_SCORE = '' THEN 0 ELSE GRADE_SCORE END AS GRADE_SCORE
-			FROM ms_grade_version
+				   CASE WHEN GRADE_SCORE = '' THEN 0 ELSE GRADE_SCORE END AS GRADE_SCORE,
+				   (SELECT CASE WHEN ETC1 IS NULL OR LEN(ETC1) = 0 THEN 'N' ELSE ETC1 END FROM ms_codebook WHERE CODE_TYPE = 'VSS160' AND CODE_ID = g.GRADE) AS MON_YN 
+			FROM ms_grade_version g WITH(NOLOCK)
 			WHERE VERSION = (SELECT MAX(CONVERT(INT,VERSION)) FROM ms_grade_version)
 			ORDER BY GRADE
 			     
@@ -1998,7 +2495,8 @@
 			ORDER BY A.CON_ENT_DGN_NO
         ]]></query>
 	</sql-service>
-
+	
+	<!--
 	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_6' datasource='is_stat' type='prepared' batch='true'>
 		<description>Grade 결과 저장하기</description>
 		<batch-name>GradeRslt</batch-name>
@@ -2029,8 +2527,53 @@
 
         ]]></query>
 	</sql-service>
-
-
+	-->	
+	
+	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_6' datasource='is_stat' type='prepared' batch='true'>
+		<description>Grade 결과 저장하기</description>
+		<batch-name>GradeRslt</batch-name>
+		<query><![CDATA[
+			MERGE INTO ms_grade_sum 
+			USING (SELECT 1 AS dual) AS b
+			ON ( CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+			     AND VERSION=  ?VERSION)
+			WHEN MATCHED THEN
+			    UPDATE SET 
+					GRADE = ?GRADE ,
+					GRADE_SUM = ?GRADE_SUM ,
+					VRS_SCORE = ?VRS_SCORE , 
+					BAN_SCORE = ?BAN_SCORE ,
+					BEF_SCORE = ?BEF_SCORE ,
+					SEC_SCORE = ?SEC_SCORE ,
+					FOC_SCORE = ?FOC_SCORE ,
+					MEN_SCORE = ?MEN_SCORE 	
+			WHEN NOT MATCHED THEN
+			    INSERT (
+					CON_ENT_DGN_NO,
+					VERSION,
+					GRADE,
+					GRADE_SUM,
+					VRS_SCORE,
+					BAN_SCORE,
+					BEF_SCORE,
+					SEC_SCORE,
+					FOC_SCORE,
+					MEN_SCORE
+				) VALUES (
+					?CON_ENT_DGN_NO,
+					?VERSION,
+					?GRADE,
+					?GRADE_SUM,
+					?VRS_SCORE,
+					?BAN_SCORE,
+					?BEF_SCORE,
+					?SEC_SCORE,
+					?FOC_SCORE,
+					?MEN_SCORE
+				);
+        ]]></query>
+	</sql-service>
+	
 	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_7' datasource='is_stat' type='prepared' batch='true'>
 		<description>소속 기준으로 등급 업데이트</description>
 		<batch-name>GradeRslt</batch-name>
@@ -2144,7 +2687,12 @@
 			        ALTR_GRADE = ?CHG_GRADE_NM,
 			        ALTR_RSN =?CHG_COMMENT,
 			        ALTR_DTM = SYSDATE,
-			        UPDR_ID = 'VA'
+			        UPDR_ID = 'VA',
+			        OBSV_CNT = ?OBSV_CNT,
+					ALL_ITEM_CNT = ?ALL_ITEM_CNT,
+					HAPP_CALL_ENCO_YN = ?HAPP_CALL_ENCO_YN,
+					REAL_OWN_CFRM_YN = ?REAL_OWN_CFRM_YN
+					
 			WHEN NOT MATCHED THEN
 			    INSERT (
 							ENTR_DSGN_NO,
@@ -2162,7 +2710,11 @@
 							REGN_DTM,
 							RGTR_ID,
 							ALTR_DTM,
-							UPDR_ID
+							UPDR_ID,
+							OBSV_CNT,
+							ALL_ITEM_CNT,
+							HAPP_CALL_ENCO_YN,
+							REAL_OWN_CFRM_YN
 						) VALUES (
 							?CON_ENT_DGN_NO,
 							?VERSION,
@@ -2179,7 +2731,11 @@
 							SYSDATE,
 							'VA',
 							SYSDATE,
-							'VA'
+							'VA',
+							?OBSV_CNT,
+							?ALL_ITEM_CNT,
+							?HAPP_CALL_ENCO_YN,
+							?REAL_OWN_CFRM_YN
 						)
 
         ]]></query>
@@ -2208,6 +2764,98 @@
 			
         ]]></query>
 	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_15' datasource='aig_tm' type='prepared' batch='true'>
+		<description>Grade 결과 중 집중모니터링 항목을 AiGEN에 저장하기</description>
+		<batch-name>DS_MON_RES</batch-name>
+		<query><![CDATA[
+		   INSERT INTO TSOWN.TB_IVST_MTHD_HIST 
+	         ( ENT_DGN_NO	
+	         , SEQN
+	         , IVST_MTCD
+	         , VLD_YN
+	         , REG_ID
+	         , REG_DATE
+	         , REG_TIME )
+		   SELECT
+		     ?CON_ENT_DGN_NO
+		    , (SELECT NVL(MAX(SEQN), 0) + 1 FROM TSOWN.TB_IVST_MTHD_HIST WHERE ENT_DGN_NO = ?CON_ENT_DGN_NO)
+		    , '01'
+		    , 'Y'
+		    , 'VA'
+		    , TO_CHAR(SYSDATE, 'YYYYMMDD')
+		    , TO_CHAR(SYSDATE, 'HH24MISS')
+		   FROM DUAL 
+		   WHERE NOT EXISTS(
+		   		SELECT ENT_DGN_NO
+		   		FROM TSOWN.TB_IVST_MTHD_HIST
+		   		WHERE ENT_DGN_NO = ?CON_ENT_DGN_NO
+		   		AND IVST_MTCD = '01'
+		   )
+			
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_16' datasource='aig_tm' type='prepared'>
+		<description>Aigen 평가 진행여부 체크</description>
+		<result-name>msens.xcron.hansol.setgraderesultwebaction_16</result-name>
+		<query><![CDATA[
+		   SELECT COUNT(1) AS EST_CNT
+		   FROM TSOWN.TB_PRE_EST_HISTORY
+		   WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_17' datasource='is_stat' type='prepared'>
+		<description>해당 설계번호의 스크립트 준수 개수 조회</description>
+		<result-name>msens.xcron.hansol.setgraderesultwebaction_17</result-name>
+		<query><![CDATA[
+			SELECT SUM(CASE WHEN SCORE > 0 THEN 1 ELSE 0 END) AS OBSV_CNT, count(1) AS ALL_ITEM_CNT	
+			FROM (
+					SELECT
+						LCLF_CD, SCLF_CD, CTRA_INSA_CLCD, MAX(SCORE) AS SCORE
+					FROM
+						(SELECT
+								SC_LCLF_CD LCLF_CD
+								,SC_SCLF_CD SCLF_CD
+								,QST_CD
+								,SCRIPT_SENT_ID
+								,CTRA_INSA_CLCD
+								,SENT_SCORE SCORE
+								FROM ms_regu_score r 		--문장 준수한 테이블
+								WHERE CON_ENT_DGN_NO=?CED_NO
+								AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+													
+				UNION
+						SELECT
+								SC_LCLF_CD LCLF_CD
+								,SC_SCLF_CD SCLF_CD
+								,QST_CD
+								,SCRIPT_SENT_ID
+								,CTRA_INSA_CLCD
+								,SENT_SCORE SCORE
+							FROM MS_REGU_OMIT R			   --누락한 문장들 테이블
+							WHERE CON_ENT_DGN_NO=?CED_NO
+							AND (SELECT distinct GRD_FLAG FROM MS_STT_META A WHERE A.CON_ENT_DGN_NO=?CED_NO)  <> 'E'
+						) A
+				GROUP BY LCLF_CD, SCLF_CD, QST_CD,CTRA_INSA_CLCD, SCRIPT_SENT_ID
+				) AA
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setgraderesultwebaction_18' datasource='is_stat' type='prepared'>
+		<description>해당 설계번호의 해피콜 독려 여부와 CDD 이행여부 조회</description>
+		<result-name>msens.xcron.hansol.setgraderesultwebaction_18</result-name>
+		<query><![CDATA[
+			SELECT ISNULL(MAX(HCALL_YN),'') HCALL_YN, ISNULL(MAX(CDD_YN),'') CDD_YN
+			FROM ms_regu_sum S WITH(NOLOCK), ms_stt_meta M with(nolock)
+			WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+			AND S.CON_ENT_DGN_NO = ?CED_NO 
+			AND M.GRD_FLAG = 'Y'
+			GROUP BY S.CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service>
+	
 	
 	<sql-service name='msens.xcron.hansol.setEncryptionwebaction_1' datasource='is_stat' type='prepared'>
 		<description>암호화 대상자 추출하기</description>
@@ -2302,16 +2950,16 @@
 		<description>자동배분 대상 조회해오기</description>
 		<result-name>msens.xcron.hansol.setautoassignwebaction_1</result-name>
 		<query><![CDATA[
-			SELECT TOP(100) M.CON_ENT_DGN_NO
+			SELECT TOP(30) M.CON_ENT_DGN_NO
 							,(SELECT CODE_NAME from ms_codebook WITH(NOLOCK) WHERE CODE_TYPE='VSS160' AND CODE_ID =ISNULL(MAX(CHG_GRADE),MAX(GRADE))) GRADE
 							,(SELECT  CASE WHEN (DATEPART(WEEKDAY, H.SOLAR) IN (7,1) OR H.DETAIL IS NOT NULL) THEN 'N'
 									  ELSE 'Y' END
 							  FROM ms_holiday_info H WITH(NOLOCK)
 							  WHERE SOLAR = SUBSTRING(MAX(M.REG_DATE),0,9) ) AS AUTO_YN
+							,MAX(M.IS_GA) IS_GA
 			FROM ms_stt_meta M WITH(NOLOCK) LEFT OUTER JOIN MS_GRADE_SUM G WITH(NOLOCK) ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
 			WHERE 1=1
 			AND M.STT_FLAG= 'Y' AND GRD_FLAG = 'Y' AND ASS_FLAG = 'N'
-			-- AND M.CON_ENT_DGN_NO IN ('941906070169','941906069814','941906070176','941906069815','941906070368','941906070516') 
 			GROUP BY M.CON_ENT_DGN_NO
 			ORDER BY MAX(CON_ENT_DGN_DATE) ASC, MAX(M.REG_DATE) asc, MAX(ASS_R_TIME) ASC, M.CON_ENT_DGN_NO
 			
@@ -2343,6 +2991,20 @@
         ]]></query>
 	</sql-service>
 	
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_ga_3' datasource='aig_tm' type='prepared'>
+		<description>현재 배분된 정보가 있는지 조회</description>
+		<result-name>msens.xcron.hansol.setautoassignwebaction_3</result-name>
+		<query><![CDATA[
+			SELECT ENTR_DSGN_NO
+			    ,UDWR_ID AS TM_UPDATE_PRE_QA
+			    ,IVST_DT || '000000' AS TM_UPDATE_PRE_JUDGE_DATE
+			FROM TSOWN.TB_INSU_PLAN_GA
+			WHERE 1=1
+			AND ENTR_DSGN_NO = ?CON_ENT_DGN_NO
+
+        ]]></query>
+	</sql-service>
+	
 	<sql-service name='msens.xcron.hansol.setautoassignwebaction_4' datasource='aig_tm' type='prepared'>
 		<description>30일 이내 설계한 이력이 있는지 조회</description>
 		<result-name>msens.xcron.hansol.setautoassignwebaction_4</result-name>
@@ -2370,7 +3032,33 @@
         ]]></query>
 	</sql-service>
 	
-
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_ga_4' datasource='aig_tm' type='prepared'>
+		<description>30일 이내 설계한 이력이 있는지 조회</description>
+		<result-name>msens.xcron.hansol.setautoassignwebaction_4</result-name>
+		<query><![CDATA[
+			SELECT P.UDWR_ID AS TM_UPDATE_PRE_QA, -- 할당된 QC
+			       M.USE_YN, -- QC의 근무 여부
+			       IVST_DT AS TM_UPDATE_PRE_JUDGE_DATE, -- 배당일자
+			      (SELECT TREATYDEPTCD FROM TSOWN.TB_USER WHERE USERID = P.UDWR_ID) AS TREATYDEPTCD -- QC의 소속
+			FROM
+		    (SELECT CTRA_SSNO,
+		           UDWR_ID,
+		           ENTR_DSGN_NO,
+		           IVST_DT,
+		           SUBS_DT,
+		           (SELECT MAX(REG_DT) FROM TSOWN.TB_APP_ACT_HIST WHERE CON_ENT_DGN_NO = P.ENTR_DSGN_NO AND APP_ACT = '120') AS P_CON_ENT_DGN_DATE, -- 과거 최근 설계일자
+		           (SELECT MAX(REG_DT) FROM TSOWN.TB_APP_ACT_HIST WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO AND APP_ACT = '120') AS M_CON_ENT_DGN_DATE -- 해당 설계일자           
+		    FROM TSOWN.TB_INSU_PLAN_GA P
+		    WHERE P.CTRA_SSNO = (SELECT CTRA_SSNO FROM TSOWN.TB_INSU_PLAN_GA WHERE ENTR_DSGN_NO = ?CON_ENT_DGN_NO)    
+		    AND (P.CTRA_SSNO IS NOT NULL OR P.CTRA_SSNO != '')
+		    ) P, TSOWN.TB_PRE_EST_ALLOCATE_MNG M
+			WHERE P.UDWR_ID = M.USER_ID
+			AND UDWR_ID IS NOT NULL
+			AND (TRUNC(TO_DATE(M_CON_ENT_DGN_DATE,'YYYYMMDD')) - TRUNC(TO_DATE(P_CON_ENT_DGN_DATE,'YYYYMMDD'))) <= 30
+			ORDER BY NVL(P.SUBS_DT, '00000000') DESC, NVL(P.IVST_DT, '00000000') DESC, P.UDWR_ID
+		]]></query>
+	</sql-service>
+	
 	<sql-service name='msens.xcron.hansol.setautoassignwebaction_5' datasource='aig_tm' type='prepared'>
 		<description>해당 설계번호의 관리점코드, 코드명 조회</description>
 		<result-name>msens.xcron.hansol.setautoassignwebaction_5</result-name>
@@ -2380,6 +3068,20 @@
 			        (SELECT GROUP_NAME FROM TSOWN.TB_GROUP_INFO WHERE GROUP_CD = M.CON_TREATY_BRH_CD) AS ORG_NM
 			FROM TSOWN.TB_INSU_PLAN_MAST M
 			WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_ga_5' datasource='aig_tm' type='prepared'>
+		<description>해당 설계번호의 관리점코드, 코드명 조회</description>
+		<result-name>msens.xcron.hansol.setautoassignwebaction_5</result-name>
+		<query><![CDATA[
+			SELECT
+			    ENTR_DSGN_NO 
+			    ,NVL(TREATY_BRH_CD , TREATR_CRNO) AS ORG_CD
+			    ,(SELECT GROUP_NAME FROM TSOWN.TB_GROUP_INFO WHERE GROUP_CD = M.TREATY_BRH_CD ) AS ORG_NM
+			FROM TSOWN.TB_INSU_PLAN_GA M
+			WHERE 1=1
+			AND M.ENTR_DSGN_NO = ?CON_ENT_DGN_NO
         ]]></query>
 	</sql-service>
 	
@@ -2577,6 +3279,48 @@
         ]]></query>
 	</sql-service>
 
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_ga_12' datasource='aig_tm' type='simple'>
+		<description>해당 설계번호를 배분할 QC를 조회</description>
+		<result-name>msens.xcron.hansol.setautoassignwebaction_12</result-name>
+		<query><![CDATA[
+		   SELECT  A.USERID
+		         ,SUM(CASE WHEN C.PROCESSING_GB IN ('46','47','48') AND A.USERID = C.UDWR_ID THEN 1 ELSE 0 END) AS NOT_PROC_CNT
+		         ,SUM(CASE WHEN C.ESTREGISTDT = ?NOW_WORK_DATE AND C.PROCESSING_GB NOT IN ('46','47','48') AND A.USERID = C.UDWR_ID THEN 1 ELSE 0 END) AS PROC_CNT
+		         ,SUM(CASE WHEN C.IVST_DT = ?NOW_WORK_DATE AND A.USERID = C.UDWR_ID THEN 1 ELSE 0 END) AS TOT_CNT
+		         ,SUM(CASE WHEN C.IVST_DT = ?NOW_WORK_DATE AND A.USERID = C.UDWR_ID AND C.GRADE = '?GRADE' THEN 1 ELSE 0 END) AS GRD_CNT
+		         ,ALLO_NUM
+			  FROM TSOWN.TB_USER A
+			        ,TSOWN.TB_PRE_EST_ALLOCATE_MNG B
+			        ,(SELECT T1.UDWR_ID -- 배정QC
+			              ,T1.PROCESSING_GB -- 심사상태코드
+			              ,T1.IVST_DT -- 배정일자
+			              ,'' AS TM_NO -- TM_NO(GATM은 없음)
+			              ,T1.ENTR_DSGN_NO -- 설계번호
+			              ,NVL(T2.ALTR_GRADE, T2.GRADE) AS GRADE -- 등급
+			              ,T1.ESTREGISTDT -- 심사일자
+			          FROM (SELECT T1.UDWR_ID
+			                    ,T1.PROCESSING_GB
+			                    ,'' AS TM_NO -- TM_NO(GATM은 없음)
+			                    ,T1.ENTR_DSGN_NO
+			                    ,T1.IVST_DT
+			                    ,(SELECT SUBSTR(NVL(ESTREGISTDT,''),0,8) FROM TSOWN.TB_PRE_EST_HISTORY H WHERE H.CON_ENT_DGN_NO = T1.ENTR_DSGN_NO AND HTDGREE = 1) AS ESTREGISTDT
+			                FROM TSOWN.TB_INSU_PLAN_GA T1
+			                WHERE (IVST_DT BETWEEN ?BEF_WORK_DATE AND ?NOW_WORK_DATE)
+			                AND   T1.UDWR_ID IS NOT NULL
+			               ) T1, TSOWN.TB_VA_GRADE_RSLT T2
+			          WHERE T1.ENTR_DSGN_NO = T2.ENTR_DSGN_NO(+)
+			        ) C
+			WHERE    A.USED_ST != '3'
+			AND      B.USE_YN = 'Y'
+			AND      B.QACD = '01'
+			AND      A.USERID = B.USER_ID
+			AND      B.USER_ID = C.UDWR_ID(+)
+			AND      A.TREATYDEPTCD IN (?QC_ORG_CD)
+			GROUP BY A.USERID, ALLO_NUM
+			ORDER BY NOT_PROC_CNT ASC, PROC_CNT ASC, TOT_CNT ASC, GRD_CNT ASC, ALLO_NUM ASC
+        ]]></query>
+	</sql-service>
+
 	<sql-service name='msens.xcron.hansol.setautoassignwebaction_13' datasource='aig_tm' type='prepared' batch='true'>
 		<description>AiGEN 자동배분 할당 정보 전달</description>
 		<batch-name>alloc_List</batch-name>
@@ -2588,6 +3332,18 @@
 			WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
 			AND (TM_UPDATE_PRE_QA IS NULL OR TM_UPDATE_PRE_QA = '')
 						
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_ga_13' datasource='aig_tm' type='prepared' batch='true'>
+		<description>AiGEN 자동배분 할당 정보 전달</description>
+		<batch-name>alloc_List</batch-name>
+		<query><![CDATA[
+			UPDATE TSOWN.TB_INSU_PLAN_GA
+			SET UDWR_ID = ?ASS_USER_ID,
+			    IVST_DT = TO_CHAR(SYSDATE,'YYYYMMDD')
+			WHERE ENTR_DSGN_NO = ?CON_ENT_DGN_NO
+			AND (UDWR_ID IS NULL OR UDWR_ID = '')
         ]]></query>
 	</sql-service>
 	
@@ -2637,7 +3393,36 @@
         ]]></query>
 	</sql-service>
 	
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_17' datasource='aig_tm' type='prepared' batch='false'>
+		<description>필수모니터링 여부 체크</description>
+		<result-name>msens.xcron.hansol.setautoassignwebaction_17</result-name>
+		<query><![CDATA[
+
+			SELECT CASE WHEN IVST_MTCD = '02' THEN 'Y' ELSE 'N' END ESSENTIAL_YN
+			FROM   TSOWN.TB_IVST_MTHD_HIST
+			WHERE  ENT_DGN_NO = ?con_ent_dgn_no
+			AND SEQN = (SELECT NVL(MAX(SEQN), 0)
+			            FROM TSOWN.TB_IVST_MTHD_HIST
+			            WHERE ENT_DGN_NO = ?con_ent_dgn_no )
+
+						
+        ]]></query>
+	</sql-service>
 	
+	<sql-service name='msens.xcron.hansol.setautoassignwebaction_18' datasource='aig_tm' type='prepared' batch='false'>
+		<description>전수모니터링 여부 체크</description>
+		<result-name>msens.xcron.hansol.setautoassignwebaction_18</result-name>
+		<query><![CDATA[
+
+			SELECT	CASE WHEN IVST_MTCD = '01' THEN 'Y' ELSE 'N' END TOTAL_YN
+			FROM 	TSOWN.TB_IVST_MTHD_HIST
+			WHERE 	ENT_DGN_NO = ?con_ent_dgn_no
+			AND SEQN = (SELECT NVL(MAX(SEQN), 0)
+						FROM TSOWN.TB_IVST_MTHD_HIST
+						WHERE ENT_DGN_NO = ?con_ent_dgn_no )
+
+        ]]></query>
+	</sql-service>
 	
 	<sql-service name='msens.xcron.hansol.getdashboardwebaction_1' datasource='is_stat' type='prepared'>
 		<description>대시보드-분석현황 조회</description>
@@ -3628,6 +4413,284 @@
 			<parameter name='user_id' value="AND Z.USER_ID = ?USER_ID" default="" />
 	</sql-service>
 	
+	<sql-service name='msens.xcron.hansol.getdashboardwebaction_9' datasource='is_stat' type='prepared'>
+		<description>대시보드- 해피콜 독려 조회</description>
+		<result-name>msens.xcron.hansol.getdashboardwebaction_9</result-name>
+		<query><![CDATA[
+			SELECT 
+					MAX(HCALL_NOW_SCORE) AS HCALL_NOW_SCORE, 
+					MAX(HCALL_NOW_PERCENT) AS HCALL_NOW_PERCENT,
+					MAX(HCALL_YESTER_SCORE) AS HCALL_YESTER_SCORE,
+					MAX(HCALL_YESTER_PERCENT) AS HCALL_YESTER_PERCENT,
+					MAX(HCALL_MON_SCORE) AS HCALL_MON_SCORE,
+					MAX(HCALL_MON_PERCENT) AS HCALL_MON_PERCENT
+			FROM (
+					SELECT 
+						HCALL_NOW_SCORE_Y AS HCALL_NOW_SCORE,
+						CASE
+							WHEN HCALL_NOW_SCORE_TOTAL = 0 THEN 0 
+							ELSE ROUND(CONVERT(FLOAT, HCALL_NOW_SCORE_Y) / HCALL_NOW_SCORE_TOTAL , 3) * 100 
+						END AS HCALL_NOW_PERCENT,
+						0 AS HCALL_YESTER_SCORE,
+						0 AS HCALL_YESTER_PERCENT,
+						0 AS HCALL_MON_SCORE,
+						0 AS HCALL_MON_PERCENT
+					FROM 
+						(SELECT 
+							COUNT(CASE WHEN HCALL_YN='Y' THEN 1 END) AS HCALL_NOW_SCORE_Y,
+							COUNT(CASE WHEN HCALL_YN='N' THEN 1 END) AS HCALL_NOW_SCORE_N,
+							COUNT(1) AS HCALL_NOW_SCORE_TOTAL
+						FROM MS_REGU_SUM S WITH(NOLOCK),
+						(SELECT DISTINCT CON_ENT_DGN_NO 
+								FROM MS_STT_META Z WITH(NOLOCK),(SELECT 
+														ORG1_CD, 
+														ORG1_NAME ORG1_NM, 
+														ORG2_CD, 
+														ORG2_NAME ORG2_NM,
+														ORG3_CD, 
+														ORG3_NAME ORG3_NM, 
+														USER_ID, 
+														USER_NAME USER_NM 
+													FROM vw_usermaster) Y 
+								WHERE Z.USER_ID=Y.USER_ID
+								?org1_cd
+								?org2_cd
+								?org3_cd
+								?user_id
+								AND LEFT(CON_ENT_DGN_DATE, 8) = FORMAT(GETDATE(), 'yyyyMMdd')
+						) M 
+						WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+						AND HCALL_YN IN ('Y', 'N')) A
+						
+					UNION
+					
+					SELECT 
+						0 AS HCALL_NOW_SCORE,
+						0 AS HCALL_NOW_PERCENT,
+						HCALL_YESTER_SCORE_Y AS HCALL_YESTER_SCORE,
+						CASE
+							WHEN HCALL_YESTER_SCORE_TOTAL = 0 THEN 0 
+							ELSE ROUND(CONVERT(FLOAT, HCALL_YESTER_SCORE_Y) / HCALL_YESTER_SCORE_TOTAL , 3) * 100 
+						END AS HCALL_YESTER_PERCENT,
+						0 AS HCALL_MON_SCORE,
+						0 AS HCALL_MON_PERCENT
+					FROM  
+						(SELECT 
+							COUNT(CASE WHEN HCALL_YN='Y' THEN 1 END) AS HCALL_YESTER_SCORE_Y,
+							COUNT(CASE WHEN HCALL_YN='N' THEN 1 END) AS HCALL_YESTER_SCORE_N,
+							COUNT(1) AS HCALL_YESTER_SCORE_TOTAL
+						FROM MS_REGU_SUM S WITH(NOLOCK),
+						(SELECT DISTINCT CON_ENT_DGN_NO 
+								FROM MS_STT_META Z WITH(NOLOCK),(SELECT 
+														ORG1_CD, 
+														ORG1_NAME ORG1_NM, 
+														ORG2_CD, 
+														ORG2_NAME ORG2_NM,
+														ORG3_CD, 
+														ORG3_NAME ORG3_NM, 
+														USER_ID, 
+														USER_NAME USER_NM 
+													FROM vw_usermaster) Y 
+								WHERE Z.USER_ID=Y.USER_ID
+								?org1_cd
+								?org2_cd
+								?org3_cd
+								?user_id
+								AND LEFT(CON_ENT_DGN_DATE, 8) = ( --전 영업일 구하는 쿼리
+									SELECT MAX(CASE WHEN SOLAR >= FORMAT(DATEADD(DAY, -14, GETDATE()), 'yyyyMMdd') AND SOLAR <= FORMAT(DATEADD(DAY, -1, GETDATE()), 'yyyyMMdd') THEN SOLAR ELSE 0 END)
+									FROM MS_HOLIDAY_INFO
+									WHERE (SUBSTRING(SOLAR, 0, 7) = FORMAT(DATEADD(M, -1,GETDATE()), 'yyyyMM') OR SUBSTRING(SOLAR, 0, 7) = FORMAT(GETDATE(), 'yyyyMM'))
+									AND WEEK1 NOT IN ('0')
+									AND DETAIL IS NULL )
+						) M 
+						WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+						AND HCALL_YN IN ('Y', 'N')) B
+						
+					UNION
+			
+					SELECT 
+						0 AS HCALL_NOW_SCORE,
+						0 AS HCALL_NOW_PERCENT,
+						0 AS HCALL_YESTER_SCORE,
+						0 AS HCALL_YESTER_PERCENT,
+						HCALL_MON_SCORE_Y AS HCALL_MON_SCORE,
+						CASE
+							WHEN HCALL_MON_SCORE_TOTAL = 0 THEN 0 
+							ELSE ROUND(CONVERT(FLOAT, HCALL_MON_SCORE_Y) / HCALL_MON_SCORE_TOTAL , 3) * 100 
+						END AS HCALL_MON_PERCENT
+					FROM 
+						(SELECT 
+							COUNT(CASE WHEN HCALL_YN='Y' THEN 1 END) AS HCALL_MON_SCORE_Y,
+							COUNT(CASE WHEN HCALL_YN='N' THEN 1 END) AS HCALL_MON_SCORE_N,
+							COUNT(1) AS HCALL_MON_SCORE_TOTAL
+						FROM MS_REGU_SUM S WITH(NOLOCK),
+						(SELECT DISTINCT CON_ENT_DGN_NO 
+								FROM MS_STT_META Z WITH(NOLOCK),(SELECT 
+														ORG1_CD, 
+														ORG1_NAME ORG1_NM, 
+														ORG2_CD, 
+														ORG2_NAME ORG2_NM,
+														ORG3_CD, 
+														ORG3_NAME ORG3_NM, 
+														USER_ID, 
+														USER_NAME USER_NM 
+													FROM vw_usermaster) Y 
+								WHERE Z.USER_ID=Y.USER_ID
+								?org1_cd
+								?org2_cd
+								?org3_cd
+								?user_id
+								AND LEFT(CON_ENT_DGN_DATE, 6) = FORMAT(GETDATE(), 'yyyyMM')
+					) M
+					WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+					AND HCALL_YN IN ('Y', 'N')) C	
+			) RE
+        ]]></query>
+        	<parameter name='org1_cd' value="AND Y.ORG1_CD = ?ORG1_CD" default="" />
+			<parameter name='org2_cd' value="AND Y.ORG2_CD = ?ORG2_CD" default="" />
+			<parameter name='org3_cd' value="AND Y.ORG3_CD = ?ORG3_CD" default="" />
+			<parameter name='user_id' value="AND Z.USER_ID = ?USER_ID" default="" />
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.getdashboardwebaction_10' datasource='is_stat' type='prepared'>
+		<description>대시보드- CDD 이행 조회</description>
+		<result-name>msens.xcron.hansol.getdashboardwebaction_10</result-name>
+		<query><![CDATA[
+			SELECT 
+					MAX(CDD_NOW_SCORE) AS CDD_NOW_SCORE, 
+					MAX(CDD_NOW_PERCENT) AS CDD_NOW_PERCENT,
+					MAX(CDD_YESTER_SCORE) AS CDD_YESTER_SCORE,
+					MAX(CDD_YESTER_PERCENT) AS CDD_YESTER_PERCENT,
+					MAX(CDD_MON_SCORE) AS CDD_MON_SCORE,
+					MAX(CDD_MON_PERCENT) AS CDD_MON_PERCENT
+			FROM (
+					SELECT 
+						CDD_NOW_SCORE_Y AS CDD_NOW_SCORE,
+						CASE
+							WHEN CDD_NOW_SCORE_TOTAL = 0 THEN 0 
+							ELSE ROUND(CONVERT(FLOAT, CDD_NOW_SCORE_Y) / CDD_NOW_SCORE_TOTAL , 3) * 100 
+						END AS CDD_NOW_PERCENT,
+						0 AS CDD_YESTER_SCORE,
+						0 AS CDD_YESTER_PERCENT,
+						0 AS CDD_MON_SCORE,
+						0 AS CDD_MON_PERCENT
+					FROM 
+						(SELECT 
+							COUNT(CASE WHEN CDD_YN='Y' THEN 1 END) AS CDD_NOW_SCORE_Y,
+							COUNT(CASE WHEN CDD_YN='N' THEN 1 END) AS CDD_NOW_SCORE_N,
+							COUNT(1) AS CDD_NOW_SCORE_TOTAL
+						FROM MS_REGU_SUM S WITH(NOLOCK),
+						(SELECT DISTINCT CON_ENT_DGN_NO 
+								FROM MS_STT_META Z WITH(NOLOCK),(SELECT 
+														ORG1_CD, 
+														ORG1_NAME ORG1_NM, 
+														ORG2_CD, 
+														ORG2_NAME ORG2_NM,
+														ORG3_CD, 
+														ORG3_NAME ORG3_NM, 
+														USER_ID, 
+														USER_NAME USER_NM 
+													FROM vw_usermaster) Y 
+								WHERE Z.USER_ID=Y.USER_ID
+								?org1_cd
+								?org2_cd
+								?org3_cd
+								?user_id
+								AND LEFT(CON_ENT_DGN_DATE, 8) = FORMAT(GETDATE(), 'yyyyMMdd')
+						) M 
+						WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+						AND CDD_YN IN ('Y', 'N')) A
+						
+					UNION
+					
+					SELECT 
+						0 AS CDD_NOW_SCORE,
+						0 AS CDD_NOW_PERCENT,
+						CDD_YESTER_SCORE_Y AS CDD_YESTER_SCORE,
+						CASE
+							WHEN CDD_YESTER_SCORE_TOTAL = 0 THEN 0 
+							ELSE ROUND(CONVERT(FLOAT, CDD_YESTER_SCORE_Y) / CDD_YESTER_SCORE_TOTAL , 3) * 100 
+						END AS CDD_YESTER_PERCENT,
+						0 AS CDD_MON_SCORE,
+						0 AS CDD_MON_PERCENT
+					FROM  
+						(SELECT 
+							COUNT(CASE WHEN CDD_YN='Y' THEN 1 END) AS CDD_YESTER_SCORE_Y,
+							COUNT(CASE WHEN CDD_YN='N' THEN 1 END) AS CDD_YESTER_SCORE_N,
+							COUNT(1) AS CDD_YESTER_SCORE_TOTAL
+						FROM MS_REGU_SUM S WITH(NOLOCK),
+						(SELECT DISTINCT CON_ENT_DGN_NO 
+								FROM MS_STT_META Z WITH(NOLOCK),(SELECT 
+														ORG1_CD, 
+														ORG1_NAME ORG1_NM, 
+														ORG2_CD, 
+														ORG2_NAME ORG2_NM,
+														ORG3_CD, 
+														ORG3_NAME ORG3_NM, 
+														USER_ID, 
+														USER_NAME USER_NM 
+													FROM vw_usermaster) Y 
+								WHERE Z.USER_ID=Y.USER_ID
+								?org1_cd
+								?org2_cd
+								?org3_cd
+								?user_id
+								AND LEFT(CON_ENT_DGN_DATE, 8) = ( --전 영업일 구하는 쿼리
+									SELECT MAX(CASE WHEN SOLAR >= FORMAT(DATEADD(DAY, -14, GETDATE()), 'yyyyMMdd') AND SOLAR <= FORMAT(DATEADD(DAY, -1, GETDATE()), 'yyyyMMdd') THEN SOLAR ELSE 0 END)
+									FROM MS_HOLIDAY_INFO
+									WHERE (SUBSTRING(SOLAR, 0, 7) = FORMAT(DATEADD(M, -1,GETDATE()), 'yyyyMM') OR SUBSTRING(SOLAR, 0, 7) = FORMAT(GETDATE(), 'yyyyMM'))
+									AND WEEK1 NOT IN ('0')
+									AND DETAIL IS NULL )
+						) M 
+						WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+						AND CDD_YN IN ('Y', 'N')) B
+						
+					UNION
+			
+					SELECT 
+						0 AS CDD_NOW_SCORE,
+						0 AS CDD_NOW_PERCENT,
+						0 AS CDD_YESTER_SCORE,
+						0 AS CDD_YESTER_PERCENT,
+						CDD_MON_SCORE_Y AS CDD_MON_SCORE,
+						CASE
+							WHEN CDD_MON_SCORE_TOTAL = 0 THEN 0 
+							ELSE ROUND(CONVERT(FLOAT, CDD_MON_SCORE_Y) / CDD_MON_SCORE_TOTAL , 3) * 100 
+						END AS CDD_MON_PERCENT
+					FROM 
+						(SELECT 
+							COUNT(CASE WHEN CDD_YN='Y' THEN 1 END) AS CDD_MON_SCORE_Y,
+							COUNT(CASE WHEN CDD_YN='N' THEN 1 END) AS CDD_MON_SCORE_N,
+							COUNT(1) AS CDD_MON_SCORE_TOTAL
+						FROM MS_REGU_SUM S WITH(NOLOCK),
+						(SELECT DISTINCT CON_ENT_DGN_NO 
+								FROM MS_STT_META Z WITH(NOLOCK),(SELECT 
+														ORG1_CD, 
+														ORG1_NAME ORG1_NM, 
+														ORG2_CD, 
+														ORG2_NAME ORG2_NM,
+														ORG3_CD, 
+														ORG3_NAME ORG3_NM, 
+														USER_ID, 
+														USER_NAME USER_NM 
+													FROM vw_usermaster) Y 
+								WHERE Z.USER_ID=Y.USER_ID
+								?org1_cd
+								?org2_cd
+								?org3_cd
+								?user_id
+								AND LEFT(CON_ENT_DGN_DATE, 6) = FORMAT(GETDATE(), 'yyyyMM')
+					) M
+					WHERE S.CON_ENT_DGN_NO = M.CON_ENT_DGN_NO
+					AND CDD_YN IN ('Y', 'N')) C	
+			) RE
+        ]]></query>
+        	<parameter name='org1_cd' value="AND Y.ORG1_CD = ?ORG1_CD" default="" />
+			<parameter name='org2_cd' value="AND Y.ORG2_CD = ?ORG2_CD" default="" />
+			<parameter name='org3_cd' value="AND Y.ORG3_CD = ?ORG3_CD" default="" />
+			<parameter name='user_id' value="AND Z.USER_ID = ?USER_ID" default="" />
+	</sql-service>
+	
 	<sql-service name='msens.xcron.hansol.setsttencryptionwebaction_1' datasource='is_stat' type='prepared'>
 		<description>STT 암호화 대상건 추출</description>
 		<result-name>msens.xcron.hansol.setsttencryptionwebaction_1</result-name>
@@ -3761,7 +4824,7 @@
 	</sql-service>
 	
 	<sql-service name='msens.xcron.hansol.getqstmngwebaction_1' datasource='aig_tm' type='prepared'>
-		<description>시간대별 정보 조회</description>
+		<description>시간대별 정보 조회(소속구분 추가)</description>
 		<result-name>msens.xcron.hansol.getqstmngwebaction_1</result-name>
 		<query><![CDATA[
 			
@@ -3771,19 +4834,20 @@
 			WHERE M.SC_SNO = B.SC_SNO
 			AND M.SC_LCLF_CD = B.SC_LCLF_CD
 			AND B.PROD_CD = C.PROD_CD
+			AND B.CHNL_CLCD = C.CHNL_CLCD
 			?sdate
 			AND B.USE_YN = 'Y' AND C.USE_YN = 'Y'
-			-- AND M.DEL_YN = 'N' AND B.USE_YN = 'Y' AND C.USE_YN = 'Y'
-			-- AND TO_CHAR(M.ALTR_DT, 'YYYYMMDDHH24MI') IN ('201804271119')
+			?chnl_clcd
 			GROUP BY SUBSTR(TO_CHAR(M.ALTR_DT, 'YYYYMMDDHH24MISS'), 0, 13)
 			ORDER BY SUBSTR(TO_CHAR(M.ALTR_DT, 'YYYYMMDDHH24MISS'), 0, 13)
 
         ]]></query>
+        <parameter name='chnl_clcd' value="AND B.CHNL_CLCD = ?CHNL_CLCD" default="" />
         <parameter name='sdate' value="AND TO_CHAR(M.ALTR_DT, 'YYYYMMDDHH24MI') BETWEEN ?SDATE AND ?EDATE" default="AND TO_CHAR(M.ALTR_DT, 'YYYYMMDD') = TO_CHAR(SYSDATE-1, 'YYYYMMDD')" />
 	</sql-service>
 	
 	<sql-service name='msens.xcron.hansol.getqstmngwebaction_2' datasource='aig_tm' type='prepared'>
-		<description>시간대별 정보 조회</description>
+		<description>시간대별 정보 조회(소속구분 추가)</description>
 		<result-name>msens.xcron.hansol.getqstmngwebaction_2</result-name>
 		<query><![CDATA[
 			
@@ -3800,7 +4864,8 @@
 				   RE.RGTR_CRNO AS REG_ID,
 				   TO_CHAR(RE.REGN_DT, 'YYYYMMDDHH24MISS') AS REG_DATE,
 				   RE.UPDR_CRNO AS CHG_ID,
-				   TO_CHAR(RE.ALTR_DT, 'YYYYMMDDHH24MISS') AS CHG_DATE
+				   TO_CHAR(RE.ALTR_DT, 'YYYYMMDDHH24MISS') AS CHG_DATE,
+				   CHNL_CLCD
 			FROM 
 				(SELECT ROWNUM as RNUM,
 				       M.SC_SNO,
@@ -3816,18 +4881,22 @@
 				       M.RGTR_CRNO,
 				       M.REGN_DT,
 				       M.UPDR_CRNO,
-				       M.ALTR_DT
+				       M.ALTR_DT,
+				       B.CHNL_CLCD
 				FROM TSOWN.TB_SC_QST_MNG M, TSOWN.TB_SC_MNG B, TSOWN.TB_PROD_ATTR_MNG C
 				WHERE M.SC_SNO = B.SC_SNO
 				AND M.SC_LCLF_CD = B.SC_LCLF_CD
 				AND B.PROD_CD = C.PROD_CD
+				AND B.CHNL_CLCD = C.CHNL_CLCD
 				AND B.USE_YN = 'Y' AND C.USE_YN = 'Y'
 				-- AND M.DEL_YN = 'N' AND B.USE_YN = 'Y' AND C.USE_YN = 'Y'
 				AND SUBSTR(TO_CHAR(M.ALTR_DT, 'YYYYMMDDHH24MISS'), 0, 13) = ?ALTR_DT
+				?chnl_clcd
 				) RE
 			WHERE RNUM BETWEEN ?FROM_RNUM AND ?TO_RNUM
 
         ]]></query>
+        <parameter name='chnl_clcd' value="AND B.CHNL_CLCD = ?CHNL_CLCD" default="" />
 	</sql-service>
 	
 	<sql-service name='msens.xcron.hansol.getqstmngwebaction_3' datasource='is_stat' type='prepared' batch='true'>
@@ -3841,6 +4910,7 @@
 						 AND SC_SCLF_CD = ?SC_SCLF_CD
 						 AND QST_CD = ?QST_CD
 						 AND CNTR_CD = ?CNTR_CD
+						 AND CHNL_CLCD = ?CHNL_CLCD
 						)
 					WHEN MATCHED THEN
 						UPDATE SET 
@@ -3871,6 +4941,7 @@
 							   ,REG_DATE
 							   ,CHG_ID
 							   ,CHG_DATE
+							   ,CHNL_CLCD
 						)
 						VALUES ( 
 							   ?SC_SNO
@@ -3887,6 +4958,7 @@
 							   ,?REG_DATE
 							   ,?CHG_ID
 							   ,?CHG_DATE
+							   ,?CHNL_CLCD
 						);
 
         ]]></query>
@@ -4498,4 +5570,349 @@
 					AND REG_DT = ?REG_DT
         ]]></query>
 	</sql-service>
+	
+	
+	
+	<!-- 추가(210927) : grade 재분석 -->
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_1_1' datasource='is_stat' type='prepared'>
+		<description>grade 재분석 대상 추출(금칙어 가중치 존재)</description>
+		<result-name>msens.xcron.hansol.gradereanalysiswebaction_1</result-name>
+		<query><![CDATA[
+			SELECT TOP(30)M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE, M.UCID, M.REG_DATE, M.USER_ID, M.GRD_FLAG, M.TA_FLAG, M.SRC_FLAG, M.TA_R_TIME, M.SRC_R_TIME, G.GRADE
+			FROM MS_STT_META M WITH(NOLOCK)
+			LEFT OUTER JOIN MS_GRADE_SUM G WITH(NOLOCK) ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+			LEFT OUTER JOIN ms_reanalysis_target R WITH(NOLOCK) ON M.CON_ENT_DGN_NO = R.CON_ENT_DGN_NO
+			WHERE M.CON_ENT_DGN_DATE BETWEEN FORMAT(DATEADD(DAY, -1, GETDATE()), 'yyyyMMdd')+'000000' AND FORMAT(GETDATE(), 'yyyyMMdd')+'235959'
+			AND (G.GRADE = 5 
+				OR (M.GRD_FLAG <> 'Y' AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')) 
+				OR (M.TA_FLAG <> 'Y'  AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959'))
+				OR (M.SRC_FLAG <> 'Y'  AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')))
+        	AND (R.CHG_DATE IS NULL OR R.CHG_DATE <= FORMAT(DATEADD(hh, -12, GETDATE()), 'yyyyMMddhh')+'5959')
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_1_2' datasource='is_stat' type='prepared'>
+		<description>grade 재분석 대상 추출(금칙어 가중치 미존재)</description>
+		<result-name>msens.xcron.hansol.gradereanalysiswebaction_1</result-name>
+		<query><![CDATA[
+			SELECT TOP(30)M.CON_ENT_DGN_NO, M.CON_ENT_DGN_DATE, M.UCID, M.REG_DATE, M.USER_ID, M.GRD_FLAG, M.TA_FLAG, M.SRC_FLAG, M.TA_R_TIME, M.SRC_R_TIME, G.GRADE
+			FROM MS_STT_META M WITH(NOLOCK)
+			LEFT OUTER JOIN MS_GRADE_SUM G WITH(NOLOCK) ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+			LEFT OUTER JOIN ms_reanalysis_target R WITH(NOLOCK) ON M.CON_ENT_DGN_NO = R.CON_ENT_DGN_NO
+			WHERE M.CON_ENT_DGN_DATE BETWEEN FORMAT(DATEADD(DAY, -1, GETDATE()), 'yyyyMMdd')+'000000' AND FORMAT(GETDATE(), 'yyyyMMdd')+'235959'
+			AND (G.GRADE = 5 
+				OR (M.GRD_FLAG <> 'Y' AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')) 
+				OR (M.TA_FLAG <> 'Y'  AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')))
+        	AND (R.CHG_DATE IS NULL OR R.CHG_DATE <= FORMAT(DATEADD(hh, -12, GETDATE()), 'yyyyMMddhh')+'5959')
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_2_1' datasource='is_stat' type='prepared'>
+		<description>ms_reanalysis_target 테이블에 넣을 대상 추출(금칙어 가중치 존재)</description>
+		<result-name>msens.xcron.hansol.gradereanalysiswebaction_2</result-name>
+		<query><![CDATA[
+			SELECT M.CON_ENT_DGN_NO, MAX(M.CON_ENT_DGN_DATE) CON_ENT_DGN_DATE, MAX(M.USER_ID) USER_ID
+			, MAX(G.GRADE) BEF_GRADE, MAX(M.REG_DATE) BEF_ANAL_DATE 
+			,COUNT(UCID) CALL_CNT
+			FROM MS_STT_META M WITH(NOLOCK)
+			LEFT OUTER JOIN MS_GRADE_SUM G WITH(NOLOCK)
+			ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+			WHERE M.CON_ENT_DGN_DATE BETWEEN FORMAT(DATEADD(DAY, -2, GETDATE()), 'yyyyMMdd')+'000000' AND FORMAT(GETDATE(), 'yyyyMMdd')+'235959'
+			AND (G.GRADE = 5 
+				OR (M.GRD_FLAG <> 'Y' AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')) 
+				OR (M.TA_FLAG <> 'Y'  AND (M.TA_R_TIME <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959'))
+				OR (M.SRC_FLAG <> 'Y'  AND (M.SRC_R_TIME <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')))
+			AND M.CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+			GROUP BY M.CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_2_2' datasource='is_stat' type='prepared'>
+		<description>ms_reanalysis_target 테이블에 넣을 대상 추출(금칙어 가중치 미존재)</description>
+		<result-name>msens.xcron.hansol.gradereanalysiswebaction_2</result-name>
+		<query><![CDATA[
+			SELECT M.CON_ENT_DGN_NO, MAX(M.CON_ENT_DGN_DATE) CON_ENT_DGN_DATE, MAX(M.USER_ID) USER_ID
+			, MAX(G.GRADE) BEF_GRADE, MAX(M.REG_DATE) BEF_ANAL_DATE 
+			,COUNT(UCID) CALL_CNT
+			FROM MS_STT_META M WITH(NOLOCK)
+			LEFT OUTER JOIN MS_GRADE_SUM G WITH(NOLOCK)
+			ON M.CON_ENT_DGN_NO = G.CON_ENT_DGN_NO
+			WHERE M.CON_ENT_DGN_DATE BETWEEN FORMAT(DATEADD(DAY, -2, GETDATE()), 'yyyyMMdd')+'000000' AND FORMAT(GETDATE(), 'yyyyMMdd')+'235959'
+			AND (G.GRADE = 5 
+				OR (M.GRD_FLAG <> 'Y' AND (M.REG_DATE <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')) 
+				OR (M.TA_FLAG <> 'Y'  AND (M.TA_R_TIME <= FORMAT(DATEADD(hh, -5, GETDATE()), 'yyyyMMddhh')+'5959')))
+			AND M.CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+			GROUP BY M.CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_3' datasource='is_stat' type='prepared' batch='true'>
+		<description>grade 재분석 대상 이력 히스토리에 데이터 저장</description>
+		<batch-name>GradeReanaTargetList</batch-name>
+		<query><![CDATA[
+			MERGE ms_reAnalysis_target AS A
+				USING (SELECT 'X' AS DUAL) AS B
+				ON (CON_ENT_DGN_NO = ?CON_ENT_DGN_NO)
+				WHEN MATCHED THEN
+					UPDATE SET 
+					CON_ENT_DGN_DATE = ?CON_ENT_DGN_DATE,
+					USER_ID = ?USER_ID,
+					BEF_GRADE = ?BEF_GRADE,
+					BEF_ANAL_DATE = ?BEF_ANAL_DATE,
+					CALL_CNT = ?CALL_CNT,
+					CHG_DATE = format(GETDATE(),'yyyyMMddHHmmss'),
+					CHG_ID = ?CHG_ID
+				WHEN NOT MATCHED THEN
+					INSERT(
+						CON_ENT_DGN_NO
+						,CON_ENT_DGN_DATE
+						,USER_ID
+						,BEF_GRADE
+						,BEF_ANAL_DATE
+						,CALL_CNT
+						,REG_DATE
+						,REG_ID
+						,CHG_DATE
+						,CHG_ID
+					  )
+					VALUES ( 
+						?CON_ENT_DGN_NO
+						,?CON_ENT_DGN_DATE
+						,?USER_ID
+						,?BEF_GRADE
+						,?BEF_ANAL_DATE
+						,?CALL_CNT
+						,format(GETDATE(),'yyyyMMddHHmmss')
+						,?REG_ID
+						,format(GETDATE(),'yyyyMMddHHmmss')
+						,?CHG_ID
+					);
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_4' datasource='is_stat' type='prepared' batch='true'>
+		<description>기분석된 데이터 삭제</description>
+		<batch-name>GradeReanaTarget</batch-name>
+		<query><![CDATA[
+			DECLARE
+				@n_cnt INT
+			BEGIN
+			    DELETE FROM MS_GRADE_SUM WHERE CON_ENT_DGN_NO =	 ?CON_ENT_DGN_NO
+			    
+			    DELETE FROM MS_REGU_FOCUS WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+
+				DELETE FROM MS_REGU_OMIT WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				
+				DELETE FROM MS_REGU_SCORE WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				
+				DELETE FROM MS_REGU_SECRET WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				
+				DELETE FROM MS_REGU_SUM WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				
+				DELETE FROM MS_SEARCH_SUM WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				
+				DELETE FROM MS_STT_META WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+				
+				DELETE FROM MS_SEARCH_SCORE WHERE UCID = ?UCID
+				
+				DELETE FROM MS_MENT_SCORE WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO AND UCID = ?UCID
+				
+				COMMIT;
+			END;
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_5' datasource='aig_rec' type='prepared' batch='true'>
+		<description>STT 재분석 및 VA 재분석을 위해 flag 업데이트</description>
+		<batch-name>GradeReanaTarget</batch-name>
+		<query><![CDATA[
+			UPDATE Sponsor_Callinfo
+			SET STT_FLAG = 'R', STT_R_TIME = NULL, STT_ERR_CD = NULL, VA_FLAG = 'N' 
+			WHERE fileid = ?UCID
+		]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_6' datasource='is_stat' type='prepared'>
+		<description>GRADE 평가항목 별 가중치 중 금칙어 가중치 조회</description>
+		<result-name>msens.xcron.hansol.gradereanalysiswebaction_6</result-name>
+		<query><![CDATA[
+			SELECT ITEM_CD, WEIGHT, CODE_NAME
+			FROM (SELECT VERSION,
+					   ITEM_CD,
+					   WEIGHT,
+					   C.CODE_NAME
+				FROM ms_grade_weight W, (SELECT CODE_ID, CODE_NAME FROM ms_codebook WHERE CODE_TYPE = 'VSS170' AND CODE_ID != '00' AND ETC2 = 'Y') C
+				WHERE W.ITEM_CD = C.CODE_ID
+				AND VERSION = (SELECT MAX(CONVERT(INT,VERSION)) FROM ms_grade_version)) G
+			WHERE ITEM_CD = '02'
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.gradereanalysiswebaction_7' datasource='is_stat' type='prepared'>
+		<description>재분석 대상 이력 히스토리에 저장할 설계번호와  UCID meta 조회</description>
+		<result-name>msens.xcron.hansol.gradereanalysiswebaction_7</result-name>
+		<query><![CDATA[
+			SELECT UCID, CON_ENT_DGN_NO
+			FROM ms_stt_meta WITH(NOLOCK)
+			WHERE CON_ENT_DGN_NO = ?CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service>
+	<!-- 추가(210927) 끝 : grade 재분석 -->
+
+	
+	<!-- 추가(220607) : STT추출  쿼리 -->
+	<sql-service name='msens.xcron.hansol.stttransferwebAction_1' datasource='is_stat' type='prepared'>
+		<description>해당 일자의 STT 전체 건 수 확인 </description>
+		<result-name>msens.xcron.hansol.stttransferwebAction_1</result-name>
+		<query><![CDATA[
+			SELECT COUNT(1) AS CNT
+			FROM MS_STT_RSLT_MERGE WITH(NOLOCK)
+			WHERE REG_DATE BETWEEN ?dayStr +'000000' AND ?dayStr +'235959'
+			AND DURATION <> 0
+        ]]></query>
+	</sql-service>
+	
+	<sql-service name='msens.xcron.hansol.stttransferwebAction_2' datasource='is_stat' type='prepared'>
+		<description>해당 일자의 STT 전체 건 수 확인 </description>
+		<result-name>msens.xcron.hansol.stttransferwebAction_2</result-name>
+		<query><![CDATA[
+			SELECT RXTX_GB, UCID, DURATION, CONTENT, STT_SP_FLAG, REG_ID, REG_DATE, CHG_ID, CHG_DATE, ENC_FLAG, ISNULL(ENC_R_TIME,'') ENC_R_TIME
+			FROM MS_STT_RSLT_MERGE WITH(NOLOCK)
+			WHERE REG_DATE BETWEEN ?dayStr +'000000' AND ?dayStr +'235959'
+			AND DURATION <> 0
+        	ORDER BY REG_DATE DESC
+        	OFFSET CONVERT(INT, ?_START) ROWS
+        	FETCH NEXT CONVERT(INT,?_PAGESIZE) ROWS ONLY
+        ]]></query>
+	</sql-service>
+
+	<sql-service name='msens.xcron.hansol.stttransferwebAction_3' datasource='aig_rec' type='prepared'>
+		<description>추출한 ucid의 설계번호 조회 </description>
+		<result-name>msens.xcron.hansol.stttransferwebAction_3</result-name>
+		<query><![CDATA[
+			SELECT    S.UCID, S.CON_ENT_DGN_NO
+			FROM
+			(
+				SELECT  CONCAT( RecStartDT, '#' , fileid)  AS UCID  , RIGHT(Items,12) AS CON_ENT_DGN_NO 
+				FROM  Sponsor_Callinfo WITH(NOLOCK) outer apply dbo.fn_split_string(TPANO, ';') 
+				WHERE InsDate BETWEEN  ?dayStr +'000000' AND ?dayStr +'235959'
+				AND TPANO NOT LIKE CONCAT('%', 'A00000', '%') 
+				AND TPANO <> ''
+				AND RecStartDT IS NOT NULL
+				AND SpCode <> '30384'
+				AND BATCH_YN IN ('N', 'Y')
+				AND STT_FLAG = 'Y'
+				AND DURATION <> 0
+				AND (Items <> '' AND Items <> 'CS' AND Items <> 'Plan_no')
+			) S
+			WHERE LEN( S.CON_ENT_DGN_NO) = 12
+			GROUP BY S.UCID, S.CON_ENT_DGN_NO 
+        ]]></query>
+	</sql-service> 
+	<!--
+	<sql-service name='msens.xcron.hansol.stttransferwebAction_3' datasource='is_stat' type='prepared'>
+		<description>추출한 ucid의 설계번호 조회 </description>
+		<result-name>msens.xcron.hansol.stttransferwebAction_3</result-name>
+		<query><![CDATA[
+			SELECT R.UCID, ISNULL(M.CON_ENT_DGN_NO,'') CON_ENT_DGN_NO
+			FROM MS_STT_RSLT_MERGE R WITH(NOLOCK) LEFT OUTER JOIN 
+			(	SELECT UCID, CON_ENT_DGN_NO 
+				FROM MS_STT_META WITH(NOLOCK) 
+			) M
+			ON R.UCID = M.UCID
+			WHERE R.REG_DATE BETWEEN ?dayStr +'000000' AND ?dayStr +'235959'
+			ORDER BY R.UCID, M.CON_ENT_DGN_NO
+        ]]></query>
+	</sql-service> -->
+	<!-- 추가(220530) 끝 : STT추출 쿼리 -->
+	
+	<!-- 추가(230803) 재가입 간 STT 결과 TM update -->
+	<sql-service name='msens.xcron.hansol.reinfosttwebaction_1' datasource='aig_rec' type='prepared'>
+		<description>재가입 건 STT update 대상 조회 </description>
+		<result-name>msens.xcron.hansol.reinfosttwebaction_1</result-name>
+		<query><![CDATA[
+			SELECT DISTINCT 
+				   FILEID,
+				   TPANO,
+				   A.ITEMS ITEMS,
+				   STT_FLAG 
+			FROM Sponsor_Callinfo WITH(NOLOCK) outer apply  dbo.fn_split_string(TPANO, ';') A, 
+				(SELECT TOP(30) A.Items
+				 FROM (SELECT Items,
+							   CASE WHEN SUM(CASE WHEN STT_FLAG NOT IN ('N', 'S', 'E')  THEN 1 ELSE 0 END) = COUNT(ITEMS) THEN 'Y' ELSE 'N' END AS STT_YN,
+							   MAX(InsDate) AS InsDate
+						FROM  Sponsor_Callinfo WITH(NOLOCK) outer apply dbo.fn_split_string(TPANO, ';') 
+						WHERE RecStartDT BETWEEN CONVERT(VARCHAR,FORMAT(GETDATE()-105, 'yyyyMMdd'))+'000000' AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959'
+						AND TPANO <> ''
+						AND RecStartDT IS NOT NULL
+						AND SpCode <> '30384'
+						AND BATCH_YN IN ('N', 'Y')
+						AND VA_FLAG IN ('N', 'Y')
+						AND TM_SEND_FLAG <> 'Y'
+						AND (Items <> '' AND Items <> 'CS' AND Items <> 'Plan_no')
+						GROUP BY Items
+					 ) A
+				WHERE A.STT_YN = 'Y' -- 설계번호의 모든 STT 분석이 다 됐거나 오류가 있는 콜만 분석한다
+				AND A.ITEMS like 'A00000%'
+				ORDER BY InsDate DESC
+				) RE
+			WHERE A.ITEMS = RE.ITEMS
+			AND TPANO <> ''
+			AND RecStartDT BETWEEN CONVERT(VARCHAR,FORMAT(GETDATE()-105, 'yyyyMMdd'))+'000000' AND CONVERT(VARCHAR,FORMAT(GETDATE(), 'yyyyMMdd'))+'235959'
+			AND RecStartDT IS NOT NULL
+			AND SpCode <> '30384'
+			AND STT_FLAG NOT IN ('N', 'S', 'E')
+			AND BATCH_YN IN ('N', 'Y')
+			AND VA_FLAG IN ('N', 'Y')
+			AND TM_SEND_FLAG <> 'Y'
+			AND A.ITEMS like 'A00000%'
+			ORDER BY TPANO DESC;
+        ]]></query>
+	</sql-service> 
+	
+	<sql-service name='msens.xcron.hansol.reinfosttwebaction_2' datasource='aig_rec' type='prepared' batch='true'>
+		<description>재가입 건 STT 전송 FLAG 'S' UPDATE</description>
+		<batch-name>REJOIN_STT_RSLT_TEMP</batch-name>
+		<query><![CDATA[
+			UPDATE Sponsor_Callinfo
+			SET TM_SEND_FLAG = 'S'
+			WHERE TPANO = ?TPANO
+			AND FILEID = ?FILEID
+        ]]></query>
+	</sql-service> 
+	
+	
+	<sql-service name='msens.xcron.hansol.reinfosttwebaction_3' datasource='aig_tm' type='prepared' batch='true'>
+		<description>재가입 건 TM 전송</description>
+		<batch-name>REJOIN_STT_RSLT</batch-name>
+		<query><![CDATA[
+			UPDATE TSOWN.TB_THR_EXP_REJOIN
+			SET STT_CONV_YN = ?STT_FLAG,
+				STT_UPDT_DTM = SYSDATE
+			WHERE ENT_DGN_NO = ?ENT_DGN_NO
+        ]]></query>
+	</sql-service> 
+	
+		<sql-service name='msens.xcron.hansol.reinfosttwebaction_4' datasource='aig_rec' type='prepared' batch='true'>
+		<description>재가입 건 STT 전송 FLAG 'Y' UPDATE</description>
+		<batch-name>REJOIN_STT_RSLT_TEMP</batch-name>
+		<query><![CDATA[
+			UPDATE Sponsor_Callinfo
+			SET TM_SEND_FLAG = 'Y'
+			WHERE TPANO = ?TPANO
+			AND FILEID = ?FILEID
+        ]]></query>
+	</sql-service>
+	
+		<sql-service name='msens.xcron.hansol.reinfosttwebaction_5' datasource='aig_rec' type='prepared' batch='true'>
+		<description>재가입 건 STT 전송 FLAG 'N' UPDATE(ROLLBACK)</description>
+		<batch-name>REJOIN_STT_RSLT_TEMP</batch-name>
+		<query><![CDATA[
+			UPDATE Sponsor_Callinfo
+			SET TM_SEND_FLAG = 'N'
+			WHERE TPANO = ?TPANO
+			AND FILEID = ?FILEID
+        ]]></query>
+	</sql-service>
+	
 </query-collection>

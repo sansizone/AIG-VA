@@ -18,6 +18,12 @@
         <action-class>xcron.com.webaction.SttMetaWebAction</action-class>
         <page type='default'>/common/Xwing.jsp</page>
     </request>
+    
+    <request name="msens.xcron.hansol.sttmetaTestwebaction" login="false">
+        <description>STT통합정보생성 WebAction 호출 테스트</description>
+        <action-class>xcron.com.webaction.SttMetaTestWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
 
     <request name="msens.xcron.hansol.alarmmonitoringcachecall" login="false">
         <description>알람리스트 데이터 적재 호출</description>
@@ -79,6 +85,12 @@
 			 <page type='default'>/common/Xwing.jsp</page>
 	 </request>
 	 
+	  <request name="msens.xcron.hansol.splitKindWebaction" login="false">
+			 <description>질의유형코드반영(SVC_COM_017)</description>
+			 <action-class>xcron.com.webaction.SplitKindWebAction</action-class>
+			 <page type='default'>/common/Xwing.jsp</page>
+	 </request>
+	 
 	  <request name="msens.xcron.hansol.sttContentSplitWebaction" login="false">
 			 <description>STT 문장단위로 쪼개기</description>
 			 <action-class>xcron.com.webaction.SttContentSplitWebaction</action-class>
@@ -126,4 +138,29 @@
         <action-class>xcron.com.webaction.MrLsListWebAction</action-class>
         <page type='default'>/common/Xwing.jsp</page>
     </request>
+    
+    <request name="msens.xcron.hansol.gradeReanalysisWebAction" login="false">
+        <description>GRADE 재분석 WebAction 호출</description>
+        <action-class>xcron.com.webaction.GradeReanalysisWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="msens.xcron.hansol.sttTransferWebAction" login="false">
+        <description>STT 추출 및 sftp 전송</description>
+        <action-class>xcron.com.webaction.SttTransferWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+    <request name="msens.xcron.hansol.sttTransferBefWebAction" login="false">
+        <description>STT 추출 및 sftp 전송(과거 콜 분석용)</description>
+        <action-class>xcron.com.webaction.SttTransferWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
+      <request name="msens.xcron.hansol.reInfoSttWebAction" login="false">
+        <description>STT 추출 및 sftp 전송(과거 콜 분석용)</description>
+        <action-class>xcron.com.webaction.ReInfoSttWebAction</action-class>
+        <page type='default'>/common/Xwing.jsp</page>
+    </request>
+    
 </request-config>

@@ -36,6 +36,9 @@ function page_load(event) {
 			$pnl_ban_keyword.setVisible(true);
 		}
 		
+		//청약정보 탭에 한해 엑셀다운 권한 설정
+		parent.excelDownAuthSTT($btn_excel,false,false);
+		
 		getBanDetailRes();
 	}catch(e){
 		xwing.Dialog.alert(e);
@@ -98,14 +101,54 @@ function callback(reqId, res, err, xhr){
 			}
 			
 			$DS_BAN_ANS.setCursor(idxs[0]);
+			break;
 			
-		break;
+		case "btnExcelClick":
+			$DS_EXCEL.clear();
+			$DS_EXCEL.setData(res.DS_RES.column, res.DS_RES.record);
+			
+			//TODO: ban_cd 중복 시 빈칸으로 변경하는 작업
+			for(var i=1; i<$DS_EXCEL.size(); i++){
+				var bef_ban_cd = $DS_EXCEL.getValue(i-1,"BAN_CD");
+				var cur_ban_cd = $DS_EXCEL.getValue(i,"BAN_CD");
+				
+				if(bef_ban_cd == cur_ban_cd){
+					$DS_EXCEL.setValue(i,"BAN_KEYWORD","");
+					$DS_EXCEL.setValue(i,"BAN_YN","");
+					$DS_EXCEL.setValue(i,"BAN_CNT","");
+				}
+			}
+			
+			if(Xwing.getDataset('DS_EXCEL').size() > 0) {
+				Xwing.getDataGrid('grd_excel').exportData('금칙어검출결과', '../jsp/export2.jsp', true); 
+			} else {
+				xwing.Dialog.alert("출력할 금칙어 검출결과가 없습니다.");
+			}
+			
+			break;
 	}
 }
 
 //*********************************************************************************************************
 //* 클릭이벤트
 //*********************************************************************************************************/
+
+//엑셀버튼 클릭 이벤트
+function btn_excel_click(event) {
+	var opt = {
+			reqId: "btnExcelClick",
+			url: "service::msens.xcron.hansol.sttEncryptWebaction.do",
+			param: {
+				_sqlName  : 'oba.oba010t4.getBanDetailRes.excel'
+				,TYPE : 'D'
+				,BAN_CD : parent.ban_cd
+				,CED_NO : parent.ced_no
+			},
+			indicator: null,
+			showError: true
+	};
+	Xwing.request(opt, callback);
+}
 
 function grd_ban_list_click(event) {
 	var res_ban_cd = $DS_BAN_RES.getValue(event.rowIdx,'BAN_CD');
@@ -232,6 +275,26 @@ function setColor2(cellObj,rowIdx) {
 
 	return val;
 }
+
+function expr_excel_dateTime(cellObj,rowIdx) {
+	var opt = {};
+	var dsName="DS_EXCEL";
+
+	var datetime = eval("$"+dsName+".getValue(rowIdx,'UCID_DATE')");
+	
+	if(datetime == null || datetime == '')
+		return opt;
+	
+	var yyyy = datetime.substr(0,4);
+	var MM = datetime.substr(4,2);
+	var dd = datetime.substr(6,2);
+	var hh =datetime.substr(8,2);
+	var mm =datetime.substr(10,2);
+	var ss =datetime.substr(12,2);
+
+	opt=yyyy+"-"+MM+"-"+dd+" "+hh+":"+mm+":"+ss;
+	return opt;
+}
 /*]]>*/</script>
 <xwing:data>
 	<xwing:dataset id="DS_BAN_RES" description="금칙어 결과">
@@ -246,6 +309,15 @@ function setColor2(cellObj,rowIdx) {
 	<xwing:dataset id="DS_BAN_ANS" description="검출된 문장">
 		<xwing:dataset-column id="UCID"></xwing:dataset-column>
 		<xwing:dataset-column id="STT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="UCID_DATE"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset description="금칙어 결과(엑셀)" id="DS_EXCEL">
+		<xwing:dataset-column id="BAN_CD"></xwing:dataset-column>
+		<xwing:dataset-column id="BAN_KEYWORD"></xwing:dataset-column>
+		<xwing:dataset-column id="BAN_YN"></xwing:dataset-column>
+		<xwing:dataset-column id="BAN_CNT"></xwing:dataset-column>
+		<xwing:dataset-column id="STT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="ENC_FLAG"></xwing:dataset-column>
 		<xwing:dataset-column id="UCID_DATE"></xwing:dataset-column>
 	</xwing:dataset>
 </xwing:data>
@@ -298,6 +370,34 @@ function setColor2(cellObj,rowIdx) {
 			<xwing:label id="lbl4_0_1" left="0" top="0" value="금칙어키워드" height="25" width="86" anchor="none" styles="label_subtitle"></xwing:label>
 		</xwing:panel>
 		<xwing:splitbar id="splitbar0" left="310" top="52" width="5" visible="true" bindwidget="r:grd_ban_list,r:grd_ban_stt" height="614" anchor="top bottom" cursor="w-resize" styles="split_h"></xwing:splitbar>
+		<xwing:button id="btn_excel" left="715" top="9" height="25" width="25" click="btn_excel_click" styles="btn_normal" iconmargin="0 0 0 0" textpadding="0 0 0 5" borderwidth="1" anchor="top right" tabindex="10" bgimage="../images/ico_excel.png" bgimagealign="center center"></xwing:button>
+		<xwing:datagrid id="grd_excel" left="675" top="113" width="59" height="56" rownum="true" checkbox="false" anchor="top right left" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" visible="false" binddataset="DS_EXCEL">
+			<xwing:datagrid-colgroup>
+				<xwing:datagrid-column width="150"></xwing:datagrid-column>
+				<xwing:datagrid-column width="80"></xwing:datagrid-column>
+				<xwing:datagrid-column width="80"></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+				<xwing:datagrid-column></xwing:datagrid-column>
+			</xwing:datagrid-colgroup>
+			<xwing:datagrid-head>
+				<xwing:datagrid-row height="30">
+					<xwing:datagrid-cell text="금칙어"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="검출여부"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="검출건수"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="녹취일시"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="검출문장"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-head>
+			<xwing:datagrid-body>
+				<xwing:datagrid-row>
+					<xwing:datagrid-cell bindcolumn="BAN_KEYWORD"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="BAN_YN"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="BAN_CNT"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="UCID_DATE" expr="expr_excel_dateTime"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="STT_SENT"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-body>
+		</xwing:datagrid>
 	</xwing:page>
 </body>
 </html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xwing="xwing.net">
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=8;IE=9" />
+<meta http-equiv="Content-Type" content="text/html;charset=UTF-8"></meta>
+
+<link href="data:image/gif;" rel="icon" type="image/x-icon" />
+<link rel="shortcut icon" href="../msens_icon.ico" />
+
+<script src='../xwing/js/xwing.js' type="text/javascript" charset="UTF-8"></script>
+<script src='../js/common.js' type="text/javascript" charset="UTF-8"></script>
+<script src='../js/scriptutil.js' type="text/javascript" charset="UTF-8"></script>
+<script src="../js/player.js" type="text/javascript" charset="UTF-8"></script>
+<script src="../js/xwing.dataset.js" type="text/javascript" charset="UTF-8"></script>
+<link href="../css/base.css" type="text/css" rel="stylesheet" charset="UTF-8" />
+
+<script type="text/javascript" charset="UTF-8">/*<![CDATA[*/var rec_key = "", call_time="", file_path="";
+var v_url = "service::oba.oba010t4.getDetail.sel.do";
+var duplicateIdx=[];
+
+function page_load(event) {
+	try{
+		XwingObject();
+
+		
+		$lbl_ban_keyword.setValue(parent.ban_keyword);
+		//vrs select 초기화
+		parent.vrsRowNum="0";
+		if(parent.ban_cd == ""){
+			$lbl_subtitle2.setValue("금칙어검출결과(전체)");
+			$pnl_ban_keyword.setVisible(false);
+			$DS_BAN_RES.clearData();
+			$DS_BAN_ANS.clearData();
+		}else{
+			$lbl_subtitle2.setValue("금칙어검출결과");
+			$pnl_ban_keyword.setVisible(true);
+		}
+		
+		getBanDetailRes();
+	}catch(e){
+		xwing.Dialog.alert(e);
+	}
+}
+
+function getBanDetailRes(){
+	var opt = {
+			reqId: "getBanRes",
+			url: v_url,
+			param: {
+				_sqlName  : 'oba.oba010t2.getBanRes.sel',
+				BAN_CD : parent.ban_cd,
+				CED_NO : parent.ced_no
+			},
+			indicator: null,
+			showError: true
+	};
+	Xwing.request(opt, callback);
+}
+
+function getBanDetailStt(){	
+	var opt = {
+			reqId: "getDetailStt",
+			url: "service::msens.xcron.hansol.sttEncryptWebaction.do",
+			param: {
+				_sqlName  : 'oba.oba010t4.getBanDetailRes.sel'
+				,TYPE : 'D'
+				,BAN_CD : parent.ban_cd
+				,CED_NO : parent.ced_no
+			},
+			indicator: null,
+			showError: true
+	};
+	Xwing.request(opt, callback);
+}
+
+/* ***********************************************************
+ * 	콜백  함수 
+ *************************************************************/
+function callback(reqId, res, err, xhr){
+	if( res.Error != '0' ){
+			alert('ResultCode : ' + res.ResultCode + '\n\n' + 'ResultMessage : ' + res.ResultMessage);
+		return;
+	}
+	
+	switch (reqId) {
+		case "getBanRes":
+			$DS_BAN_RES.setData(res.DS_BAN_RES.column, res.DS_BAN_RES.record);
+			getBanDetailStt();
+		break;
+		
+		case "getDetailStt" :
+			$DS_BAN_ANS.setData(res.DS_RES.column, res.DS_RES.record);
+			
+			var idxs = $DS_BAN_ANS.searchRow("[BAN_CD =='"+$DS_BAN_RES.getValue(0,"BAN_CD")+"']");
+			
+			for(var i =0; i< idxs.length; i++){
+				$("#grd_ban_stt .xw-datagrid-area-body table tbody tr[cy='"+idxs[i]+"']").addClass("select");
+			}
+			
+			$DS_BAN_ANS.setCursor(idxs[0]);
+			
+		break;
+	}
+}
+
+//*********************************************************************************************************
+//* 클릭이벤트
+//*********************************************************************************************************/
+
+function grd_ban_list_click(event) {
+	var res_ban_cd = $DS_BAN_RES.getValue(event.rowIdx,'BAN_CD');
+	var stt_ban_cd="";
+	duplicateIdx=[];
+	var res_key = res_ban_cd;
+	var stt_key ="";
+	
+	var selected = document.querySelectorAll("#grd_ban_stt .select");
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+	
+	duplicateIdx = $DS_BAN_ANS.searchRow("[BAN_CD =='"+res_ban_cd+"']");
+	
+	for(var i =0; i< duplicateIdx.length; i++){
+		$("#grd_ban_stt .xw-datagrid-area-body table tbody tr[cy='"+duplicateIdx[i]+"']").addClass("select");
+	}
+	
+	$DS_BAN_ANS.setCursor(duplicateIdx[0]);
+	
+	/*for(var i=0, len=$DS_BAN_ANS.size(); i<len; i ++){
+		stt_ban_cd=$DS_BAN_ANS.getValue(i,'BAN_CD');
+		
+		$("#grd_ban_stt .xw-datagrid-area-body table tbody tr[cy='"+i+"']").removeClass("select");
+		stt_key=stt_ban_cd;
+		if(res_key == stt_key){
+			duplicateIdx.push(i);
+			//$("#grd_script_stt .xw-datagrid-area-body table tbody tr[cy='"+i+"']").addClass("select");
+		}
+	}
+	
+	for(var i=0; i< duplicateIdx.length; i++){
+		$("#grd_ban_stt .xw-datagrid-area-body table tbody tr[cy='"+duplicateIdx[i]+"']").addClass("select");
+	}*/
+	
+	
+	
+	//expr 적용위해- 해당 데이터 색깔 칠하기
+	/*var dg = Xwing.getDataGrid("grd_ban_stt");
+	dg.setBinddataset("");
+	dg.setBinddataset("DS_BAN_ANS");*/
+}
+
+
+
+function grd_ban_stt_click(event) {
+	var nCell = event.cell._getColIndex();
+	
+	var selected = document.querySelectorAll("#grd_ban_stt .select");
+	for(var i=0, len=selected.length; i<len; i ++){
+		selected[i].classList.remove("select");
+	}
+	
+	$("#grd_ban_stt .xw-datagrid-area-body table tbody tr[cy='"+event.rowIdx+"']").addClass("select");
+	
+	if(nCell == 0){
+		rec_key =  $DS_BAN_ANS.getValue(event.rowIdx,'UCID');
+		call_time = $DS_BAN_ANS.getValue(event.rowIdx,'UCID_DATE');
+		file_path = $DS_BAN_ANS.getValue(event.rowIdx,'FILE_FULL_PATH');
+		if(parent.selected_ucid != rec_key){
+			parent.load_player(rec_key,call_time,'L', file_path);
+			parent.selected_ucid = rec_key;
+			parent.cmb_ucid_date_change2(rec_key);
+		}
+		
+	}else if(nCell == 1){
+		var selectedRec = $DS_BAN_ANS.getValue(event.rowIdx,'UCID');
+		var selectedTime = $DS_BAN_ANS.getValue(event.rowIdx,'UCID_DATE');
+		var selectedFile = $DS_BAN_ANS.getValue(event.rowIdx,'FILE_FULL_PATH');
+		
+		if(parent.selected_ucid != '' && parent.selected_ucid != selectedRec){
+			xwing.Dialog.alert("현재 청취하고 계시는 녹취 콜과 다른 콜입니다.\n 좌측의 청취 버튼을 클릭해주세요.");
+			return;
+		}else{
+			var start_point = $DS_BAN_ANS.getValue(event.rowIdx,'START_TIME');
+			parent.seekToSTT(start_point);
+		}
+		
+		/*if(selectedRec != rec_key && selectedTime != call_time){
+			rec_key = selectedRec;
+			call_time = selectedTime;
+			file_path = selectedFile;
+			parent.load_player(rec_key,call_time,'L', file_path);
+		}else{
+			var start_point = $DS_BAN_ANS.getValue(event.rowIdx,'START_TIME');
+			
+			parent.seekToSTT(start_point);
+		}*/
+	}
+}
+/* ***********************************************************
+ * 	expr
+ *************************************************************/
+function stt_del_alpha_num_expr(cellObj,rowIdx) {
+	var opt = {};
+	var sent = $DS_BAN_ANS.getValue(rowIdx, "STT_SENT");
+	//sent.replace('\|',''); --이건 쿼리에서 제거
+	sent = sent.replace(/[A-Za-z0-9]/gi,""); //한글만
+	opt['value'] = sent.replace(/(^\s*)|(\s*$)/gi, ""); //앞 공백제거
+	
+	if(duplicateIdx.length > 0){
+		for(var i=0, len=duplicateIdx.length; i<len; i++){
+			
+			if(duplicateIdx[i]==rowIdx){
+				opt['bgcolor'] = "#d8e9ee";
+			}else{
+				opt['bgcolor'] = "#fff";
+			}
+		}
+	}
+	
+	return opt;
+}
+
+function setColor2(cellObj,rowIdx) {
+	var val={};
+	
+	if($DS_BAN_ANS.getValue(rowIdx-1,"UCID") != $DS_BAN_ANS.getValue(rowIdx,"UCID")){
+		val['bgimage'] = "../images/icon_notice.png";
+		val['bgimagerepeat'] = "no-repeat";
+		val['bgimagealign'] = "center center";
+	}
+
+	return val;
+}
+/*]]>*/</script>
+<xwing:data>
+	<xwing:dataset id="DS_BAN_RES" description="금칙어 결과">
+		<xwing:dataset-column id="BAN_CD"></xwing:dataset-column>
+		<xwing:dataset-column id="BAN_KEYWORD"></xwing:dataset-column>
+		<xwing:dataset-column id="UCID"></xwing:dataset-column>
+		<xwing:dataset-column id="BAN_CNT"></xwing:dataset-column>
+		<xwing:dataset-column id="BAN_YN"></xwing:dataset-column>
+		<xwing:dataset-column id="STT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="START_TIME"></xwing:dataset-column>
+	</xwing:dataset>
+	<xwing:dataset id="DS_BAN_ANS" description="검출된 문장">
+		<xwing:dataset-column id="UCID"></xwing:dataset-column>
+		<xwing:dataset-column id="STT_SENT"></xwing:dataset-column>
+		<xwing:dataset-column id="UCID_DATE"></xwing:dataset-column>
+	</xwing:dataset>
+</xwing:data>
+</head>
+<body>
+	<xwing:page id="page" title="콜청취" width="752" height="667" load="page_load" scroll="false">
+		<xwing:datagrid id="grd_ban_list" left="5" top="53" width="302" height="614" rownum="true" checkbox="false" binddataset="DS_BAN_RES" anchor="top bottom left" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" click="grd_ban_list_click">
+			<xwing:datagrid-colgroup>
+				<xwing:datagrid-column width="130"></xwing:datagrid-column>
+				<xwing:datagrid-column width="60"></xwing:datagrid-column>
+				<xwing:datagrid-column width="60"></xwing:datagrid-column>
+			</xwing:datagrid-colgroup>
+			<xwing:datagrid-head>
+				<xwing:datagrid-row height="30">
+					<xwing:datagrid-cell text="금칙어" halign="center" fontweight="bold"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="검출여부" halign="center" fontweight="bold"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="검출건수" halign="center" fontweight="bold"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-head>
+			<xwing:datagrid-body>
+				<xwing:datagrid-row>
+					<xwing:datagrid-cell halign="left" bindcolumn="BAN_KEYWORD"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="BAN_YN" halign="center"></xwing:datagrid-cell>
+					<xwing:datagrid-cell bindcolumn="BAN_CNT" halign="right"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-body>
+		</xwing:datagrid>
+		<xwing:label id="lbl_subtitle2" value="금칙어검출결과" left="0" top="0" width="752" height="40" styles="label_boxtitle" halign="left" anchor="top right left" bggradientdir="horizontal" bgimagealign="left center"></xwing:label>
+		<xwing:datagrid id="grd_ban_stt" left="318" top="53" width="429" height="614" rownum="true" checkbox="false" binddataset="DS_BAN_ANS" anchor="all" sortable="true" resizable="true" pageable="false" autofit="true" borderwidth="1" styles="table_border" textwrap="prewrap" click="grd_ban_stt_click">
+			<xwing:datagrid-colgroup>
+				<xwing:datagrid-column width="50"></xwing:datagrid-column>
+				<xwing:datagrid-column width="320"></xwing:datagrid-column>
+			</xwing:datagrid-colgroup>
+			<xwing:datagrid-head>
+				<xwing:datagrid-row height="30">
+					<xwing:datagrid-cell text="녹취"></xwing:datagrid-cell>
+					<xwing:datagrid-cell text="검출문장" halign="center" fontweight="bold"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-head>
+			<xwing:datagrid-body>
+				<xwing:datagrid-row>
+					<xwing:datagrid-cell bindcolumn="UCID_DATE" expr="setColor2" cursor="pointer" suppress="false"></xwing:datagrid-cell>
+					<xwing:datagrid-cell halign="left" bindcolumn="STT_SENT" cursor="pointer"></xwing:datagrid-cell>
+				</xwing:datagrid-row>
+			</xwing:datagrid-body>
+		</xwing:datagrid>
+		<xwing:panel id="pnl_ban_keyword" left="170" top="8" width="496" height="26" scroll="false">
+			<xwing:label id="lbl_ban_keyword" left="96" top="0" height="25" width="383" anchor="none" value="금칙어키워드"></xwing:label>
+			<xwing:label id="lbl4_0_0" left="70" top="0" value=":" height="25" width="20" anchor="none" styles="label_subtitle"></xwing:label>
+			<xwing:label id="lbl4_0_1" left="0" top="0" value="금칙어키워드" height="25" width="86" anchor="none" styles="label_subtitle"></xwing:label>
+		</xwing:panel>
+		<xwing:splitbar id="splitbar0" left="310" top="52" width="5" visible="true" bindwidget="r:grd_ban_list,r:grd_ban_stt" height="614" anchor="top bottom" cursor="w-resize" styles="split_h"></xwing:splitbar>
+	</xwing:page>
+</body>
+</html>
